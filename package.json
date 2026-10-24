@@ -1,0 +1,33 @@
+{
+  "name": "fb-ticket-monitor",
+  "version": "1.0.0",
+  "description": "Facebook Group Concert Ticket Monitor using Playwright & Telegram Bot",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "login": "node src/login-helper.js",
+    "test": "node tests/parser.test.js && node tests/database.test.js && node tests/gemini.test.js",
+    "test:parser": "node tests/parser.test.js",
+    "test:db": "node tests/database.test.js",
+    "test:telegram": "node tests/telegram.test.js",
+    "test:gemini": "node tests/gemini.test.js"
+  },
+  "keywords": [
+    "facebook",
+    "ticket-monitor",
+    "playwright",
+    "telegram-bot",
+    "concert-ticket",
+    "ticket-alert"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^2.31.0",
+    "dotenv": "^16.4.7",
+    "playwright": "^1.50.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.8.1"
+  }
+}
