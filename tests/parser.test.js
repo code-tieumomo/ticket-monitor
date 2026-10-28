@@ -1,78 +1,95 @@
 const assert = require('assert');
-const { parseContent } = require('../src/parser');
+const { parseContent, detectTargetVenue } = require('../src/parser');
 
-console.log('--- Testing Parser Module ---');
+console.log('--- Testing Badminton Parser Module ---');
 
-// Test Case 1: Standard seller with VIP and Day 1
+// Test Case 1: Real-world User Example 4 - Sân Maxping Định Công
 {
-  const text = 'Mình pass lại 2 vé VIP 1 Day 1 concert Anh Trai Say Hi giá gốc, giao dịch trực tiếp tại HN.';
+  const text = `🏸 TUYỂN GIAO LƯU SÁNG MAI 35K
+Sân Maxping Định Công
+⏰ 8:30 - 10:30
+🏸 Nam/Nữ – Y/TBY: 35K
+🏟️ Sân Max 8
+🪶 Cầu 98–99%
+Liên hệ tuiii nha💓`;
+
   const res = parseContent(text);
-  assert.strictEqual(res.isMatch, true, 'Should match standard pass VIP');
-  assert.strictEqual(res.priority, 'HIGH', 'Should be HIGH priority due to escrow/direct meet + VIP');
-  assert(res.tags.some(t => t.includes('VIP 1')), 'Should extract VIP 1');
-  assert(res.tags.some(t => t.includes('Day 1')), 'Should extract Day 1');
-  console.log('✅ Passed Test Case 1: Standard seller VIP Day 1');
+  assert.strictEqual(res.isMatch, true, 'Must match Sân Maxping Định Công');
+  assert.strictEqual(res.matchesLocation, true, 'Location matches target venues');
+  assert.strictEqual(res.venueCategory, '120_DINH_CONG', 'Must identify as 120_DINH_CONG category');
+  assert(res.details.time.includes('8:30'), 'Should extract time 8:30 - 10:30');
+  assert(res.details.level.includes('Y/TBY'), 'Should extract level Y/TBY');
+  assert(res.details.fee.includes('35K') || res.details.fee.includes('35k'), 'Should extract fee 35k');
+  assert(res.details.shuttle.includes('98'), 'Should extract shuttle 98–99%');
+  console.log('✅ Passed Test Case 1: Real-world User Example (Sân Maxping Định Công)');
 }
 
-// Test Case 2: Negative intent (Buyer seeking ticket)
+// Test Case 2: Teencode 120 dc & 120 Định Công
 {
-  const text = 'Cần mua 2 vé CAT 2 Day 2 ai có pass ib mình nhé!';
+  const text = 'Tối nay 120 dc ca 20h-22h thiếu 2 chân vãng lai trình TB-, cầu Ba Sao 50k ai vào được ib mình';
   const res = parseContent(text);
-  assert.strictEqual(res.isMatch, false, 'Should ignore buyer post');
-  assert.strictEqual(res.reason, 'negative_intent_buyer');
-  console.log('✅ Passed Test Case 2: Reject buyer looking for tickets');
+  assert.strictEqual(res.isMatch, true, 'Must match 120 dc');
+  assert.strictEqual(res.venueCategory, '120_DINH_CONG');
+  assert.strictEqual(res.priority, 'HIGH', 'Tối nay should be HIGH priority');
+  console.log('✅ Passed Test Case 2: Teencode 120 dc');
 }
 
-// Test Case 3: Negative intent with "ai pass không"
+// Test Case 3: Sân 488 Minh Khai and 488 mk
 {
-  const text = 'Ai pass vé CAT 3 giá rẻ không ạ, tìm vé gấp!';
+  const text = 'Tìm 1 bạn nam giao lưu cầu lông sân 488 Minh Khai lúc 19h-21h tối T5, cầu Hải Yến, share bill';
   const res = parseContent(text);
-  assert.strictEqual(res.isMatch, false, 'Should ignore "ai pass" asking buyer');
-  console.log('✅ Passed Test Case 3: Reject "ai pass vé"');
+  assert.strictEqual(res.isMatch, true, 'Must match 488 Minh Khai');
+  assert.strictEqual(res.venueCategory, '488_MINH_KHAI');
+  assert(res.tags.some(t => t.includes('488 Minh Khai')));
+  console.log('✅ Passed Test Case 3: Sân 488 Minh Khai');
 }
 
-// Test Case 4: Seller using "Cần pass"
+// Test Case 4: Sân Tân Mai & sân tm
 {
-  const text = 'Cần pass gấp 1 vé GA 1 ngày 2, dẫn vào sân mới nhận tiền. Giá 1tr5';
+  const text = 'CLB giao lưu sân Tân Mai sáng CN 8h-10h tuyển thêm nam nữ trình Y/TBY, cầu TC 77';
   const res = parseContent(text);
-  assert.strictEqual(res.isMatch, true, 'Should recognize "cần pass" as seller');
-  assert(res.tags.some(t => t.includes('GA 1')), 'Should extract GA 1');
-  assert(res.tags.some(t => t.includes('dẫn vào sân')), 'Should extract escrow hint');
-  console.log('✅ Passed Test Case 4: Seller with "cần pass gấp"');
+  assert.strictEqual(res.isMatch, true, 'Must match Sân Tân Mai');
+  assert.strictEqual(res.venueCategory, 'TAN_MAI');
+  console.log('✅ Passed Test Case 4: Sân Tân Mai');
 }
 
-// Test Case 5: Seller with CAT 4 and price
+// Test Case 5: Real-world User Example 1 & 2 - Non-target location (Nguyễn Xiển)
 {
-  const text = 'Nhượng lại vé CAT 4 D1 giá 800k gdtg';
+  const text = `sẵn 3 nam 4 nữ tìm thêm 1 mảnh ghép cuối ca 0-2h bmc ng xiển
+nam tb- tb 65 cá
+đánh cầu pro X`;
+
   const res = parseContent(text);
-  assert.strictEqual(res.isMatch, true, 'Should match nhượng vé');
-  assert(res.tags.some(t => t.includes('CAT 4')), 'Should extract CAT 4');
-  console.log('✅ Passed Test Case 5: Seller CAT 4');
+  assert.strictEqual(res.isBadminton, true, 'Must recognize as badminton pickup game');
+  assert.strictEqual(res.matchesLocation, false, 'Must NOT match target locations (is at Nguyễn Xiển)');
+  assert.strictEqual(res.isMatch, false, 'Should not alert when filterByTargetLocation is on');
+  console.log('✅ Passed Test Case 5: Non-target venue correctly filtered (BMC Nguyễn Xiển)');
 }
 
-// Test Case 6: Unrelated goods (e.g. passing clothes)
+// Test Case 6: Pure equipment sale (Pass vợt Yonex)
 {
-  const text = 'Mình pass lại chiếc áo thun Zara size M giá 200k ai lấy ib';
+  const text = 'Pass vợt Yonex Astrox 88D Pro chính hãng 99% giá 2tr5 tại Hà Nội';
   const res = parseContent(text);
-  assert.strictEqual(res.isMatch, false, 'Should ignore unrelated goods without ticket context');
-  console.log('✅ Passed Test Case 6: Ignore unrelated goods');
+  assert.strictEqual(res.isMatch, false, 'Should ignore pure equipment sale');
+  assert.strictEqual(res.reason, 'equipment_only');
+  console.log('✅ Passed Test Case 6: Reject pure racket selling post');
 }
 
-// Test Case 7: Real-world concert ticket format: Gold7Day2
+// Test Case 7: Actionable Comment under parent post
 {
-  const text = 'Mình pass cặp vé Gold7Day2 hàng H4-5';
-  const res = parseContent(text);
-  assert.strictEqual(res.isMatch, true, 'Should match Gold7Day2 ticket');
-  assert(res.tags.some(t => t.includes('GOLD 7')), 'Should extract GOLD 7');
-  assert(res.tags.some(t => t.includes('Day 2')), 'Should extract Day 2');
-  console.log('✅ Passed Test Case 7: Real-world ticket Gold7Day2');
+  const parentPost = 'Tối nay ai biết khu vực Hoàng Mai/Hai Bà Trưng có sân nào còn slot ko ạ?';
+  const commentText = 'Sân 120 Định Công bên mình còn 2 slot ca 20-22h nhé b ơi, cầu TC77 40k!';
+  const res = parseContent(commentText, { parentPostText: parentPost });
+  assert.strictEqual(res.isMatch, true, 'Actionable comment offering slot at 120 Dinh Cong matches');
+  assert.strictEqual(res.venueCategory, '120_DINH_CONG');
+  console.log('✅ Passed Test Case 7: Actionable comment offering slot at target venue');
 }
 
-// Test Case 7: Empty or invalid input
+// Test Case 8: Empty or invalid input
 {
   assert.strictEqual(parseContent(null).isMatch, false);
   assert.strictEqual(parseContent('').isMatch, false);
-  console.log('✅ Passed Test Case 7: Handle empty inputs');
+  console.log('✅ Passed Test Case 8: Handle empty inputs safely');
 }
 
-console.log('🎉 All Parser tests passed successfully!\n');
+console.log('🎉 All Badminton Parser tests passed successfully!\n');

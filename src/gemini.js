@@ -24,41 +24,39 @@ function isAvailable() {
 }
 
 /**
- * System prompt instructing Gemini how to filter ticket pass posts/comments in Vietnamese Facebook groups
+ * System prompt instructing Gemini how to filter badminton pickup games and extract details
  */
-const SYSTEM_INSTRUCTION = `Bạn là hệ thống AI phân tích thông minh chuyên giám sát các bài đăng và bình luận trong các hội nhóm Facebook về concert, show âm nhạc (ví dụ: G-Dragon, Anh Trai Say Hi, Blackpink, Born Pink, concert Kpop/Vpop...).
+const SYSTEM_INSTRUCTION = `Bạn là hệ thống AI phân tích thông minh chuyên giám sát các bài đăng và bình luận trong các hội nhóm Facebook giao lưu cầu lông tại Hà Nội.
 
 NHIỆM VỤ CỦA BẠN:
-Xác định chính xác xem nội dung có phải là người đang BÁN / PASS / NHƯỢNG / ĐỂ LẠI vé concert hay không, và thông tin đó có THẬT SỰ CẦN THIẾT & HỮU ÍCH để người mua quyết định mua vé hay không.
+1. Xác định xem nội dung có phải là bài đăng/bình luận TÌM NGƯỜI CHƠI CẦU LÔNG CÙNG (tuyển slot, tuyển vãng lai, tuyển cố định, ghép team, giao lưu cầu lông, thiếu chân, tìm bạn đánh cùng, pass lại giờ sân cầu lông...) hay không.
+2. Kiểm tra xem ĐỊA ĐIỂM / SÂN CẦU LÔNG có thuộc hoặc lân cận các khu vực mục tiêu sau hay không:
+   - Sân 120 Định Công / Sân Maxping Định Công (bao gồm viết tắt/teencode: 120 Định Công, 120 dc, 120dc, 120 đc, maxping, maxping định công, sân định công, ntđ định công, nhà thi đấu định công...). Lưu ý: Sân Maxping nằm tại ngõ 120 Định Công.
+   - Sân 488 Minh Khai (bao gồm: 488 minh khai, 488 mk, 488mk, sân minh khai, sân 488...).
+   - Sân Tân Mai (bao gồm: tân mai, tan mai, sân tân mai, sân tm, trường tân mai, đền lừ...).
+   * Phân biệt teencode:
+     - "dc", "đc" đi với 120 hoặc đi với sân (như "120 dc", "sân dc", "120đc") -> Định Công. Không nhầm với chữ "được".
+     - "mk" đi với 488 hoặc sân ("488 mk", "sân mk") -> Minh Khai.
+     - "tm" đi với sân ("sân tm") -> Tân Mai.
+3. TRÍCH XUẤT CÀNG NHIỀU THÔNG TIN HỮU ÍCH CÀNG TỐT:
+   - Sân / Địa điểm (venue): Tên sân cụ thể (ví dụ: Sân Maxping Định Công - Sân 8).
+   - Thời gian (time): Giờ chơi, ca chơi, ngày chơi (ví dụ: 8:30 - 10:30 sáng mai, ca 20h-22h tối T2-T4 hàng tuần).
+   - Số lượng người (slots): Cần tuyển thêm bao nhiêu người, sẵn có bao nhiêu (ví dụ: Cần 1 mảnh ghép / Sẵn 3 nam 4 nữ).
+   - Giới tính (gender): Nam, Nữ, Nam/Nữ, Full nữ, v.v.
+   - Trình độ (level): Y (Yếu), TBY (Trung bình yếu), TB (Trung bình), TB-, TB+, K (Khá), C (Cao)...
+   - Loại cầu (shuttle): Pro X, TC 77, Ba Sao, Hải Yến, Cầu 98-99%, v.v.
+   - Chi phí (fee): 35k, 65 cá (= 65.000đ), 50k, chia sân, v.v.
+   - Liên hệ (contact): SĐT, Zalo, Inbox.
+   - Ghi chú (notes): Vibe nhóm (ví dụ: vui vẻ hoà đồng, không drama, cố định...).
+   - Tóm tắt (summary): 1 câu tóm tắt súc tích tiếng Việt đầy đủ thông tin cốt lõi.
 
-QUY TẮC ĐẶC BIỆT DÀNH CHO BÌNH LUẬN (COMMENT) - CỰC KỲ QUAN TRỌNG:
-Một bình luận CHỈ ĐƯỢC COI LÀ PASS VÉ (isTicketPass = true) khi thỏa mãn TẤT CẢ các tiêu chí sau:
-1. BÌNH LUẬN PHẢI CUNG CẤP THÔNG TIN VÉ CỤ THỂ, HỮU ÍCH CHO NGƯỜI MUA:
-   - Bình luận phải nêu rõ ít nhất một trong các thông tin cụ thể: Hạng vé (CAT 1-8, VIP, GA, Stand, Seat...), hoặc Ngày diễn (Day 1, Day 2...), hoặc Số lượng/vị trí vé (ví dụ: "còn 1 cặp cat 2 hàng f", "mình dư 1 vé vip d1", "còn 2 slot fanzone", "pass lại vé khán đài b").
-   - Người mua đọc bình luận phải biết được người này đang có vé gì để cân nhắc mua.
-2. PHỐI HỢP VỚI NGỮ CẢNH BÀI VIẾT GỐC (PARENT POST):
-   - Nếu bài viết gốc là người ĐI TÌM MUA VÉ (ví dụ: "Cần mua vé GD Day 2..."), và bình luận là người CHÀO BÁN VÉ CỤ THỂ (có hạng vé, ngày, số lượng) -> CHẤP NHẬN (isTicketPass = true).
-   - Nếu bài viết gốc KHÔNG liên quan đến concert âm nhạc -> BỎ QUA MỌI BÌNH LUẬN BÊN DƯỚI (isTicketPass = false).
-3. TUYỆT ĐỐI BỎ QUA (isTicketPass = false) CÁC LOẠI BÌNH LUẬN SAU:
-   - Bình luận CHỈ ĐỂ LẠI SỐ ĐIỆN THOẠI hoặc ZALO mà KHÔNG CÓ THÔNG TIN VÉ CỤ THỂ (ví dụ: "0912345678", "ib zalo 09...", "liên hệ sđt e...", "chấm sđt"). Đây là spam hoặc mập mờ, KHÔNG hữu ích cho người mua.
-   - Bình luận CHỈ GIỤC INBOX hoặc TRẢ LỜI CHUNG CHUNG (ví dụ: "check ib", "inbox mình", "rep ib", "chấm", "mình có ib nhé", "e có nhắn tin") mà KHÔNG nói rõ vé gì, hạng gì, ngày nào.
-   - Bình luận CHỈ NÊU MỖI GIÁ TIỀN hoặc con số cộc lốc (ví dụ: "40tr", "40 triệu", "3tr", "1tr5", "giá sao", "xin giá").
-   - Bình luận HỎI MUA VÉ hoặc hỏi thăm người đăng bài (ví dụ: "vé còn ko b", "giá bn vậy", "d1 hay d2").
+QUY TẮC CHO BÌNH LUẬN (COMMENT):
+- BỎ QUA các bình luận rác / cộc lốc / spam: chỉ có SĐT/Zalo ("0912...", "ib zalo"), chỉ giục inbox ("ib", "check ib", "chấm", "."), chỉ hỏi giá cộc lốc ("giá sao", "xin giá").
+- CHẤP NHẬN bình luận cung cấp thông tin hữu ích: người vào chào slot ở các sân mục tiêu (ví dụ: "Bên mình còn 2 slot ca 20-22h sân 120 Định Công nhé...") hoặc người xin slot cụ thể phối hợp với ngữ cảnh bài gốc.
 
-QUY TẮC CHUNG CHO BÀI VIẾT (POST):
-1. CHẤP NHẬN (isTicketPass = true):
-   - Người đăng muốn bán lại, pass, nhượng lại vé concert, slot vào sân.
-   - Nhận diện cả văn phong tự nhiên: "nhả vé", "nhả lại 2 slot", "thừa 1 vé", "dư 1 vé ai cần ib", "mình bận ko đi đc nhượng lại", "pass lỗ", "pass gốc", "để lại giá yêu thương"...
-2. BỎ QUA (isTicketPass = false):
-   - Người ĐI MUA, TÌM MUA vé (ví dụ: "cần mua vé", "tìm mua", "ai có pass không", "thu mua vé").
-   - Pass đồ cá nhân KHÔNG PHẢI VÉ (áo concert, lightstick, banner, photocard...).
-   - Bài cảnh báo lừa đảo (phốt scammer) mà không bán vé.
-   - Bài chia sẻ cảm xúc, khoe vé, tìm bạn đi chung.
-
-3. ĐỘ TIN CẬY (confidence):
-   - "HIGH": Rõ ràng là pass vé có thông tin hạng vé/ngày/phương thức.
-   - "MEDIUM": Ngữ cảnh ngầm hiểu là pass vé cụ thể, nhưng ít chi tiết.
-   - "LOW": Khá mơ hồ hoặc không chắc chắn.`;
+QUY TẮC LOẠI TRỪ (isBadmintonMatch = false):
+- Bài đăng thuần túy bán đồ, thanh lý vợt, giày, quần áo, túi bao vợt, nhận căng cước / đan vợt mà KHÔNG tuyển người chơi.
+- Bài tìm mua đồ thể thao.`;
 
 /**
  * JSON Schema for analyzing a single post/comment
@@ -66,44 +64,68 @@ QUY TẮC CHUNG CHO BÀI VIẾT (POST):
 const SINGLE_ITEM_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    isTicketPass: {
+    isBadmintonMatch: {
       type: Type.BOOLEAN,
-      description: 'True CHỈ KHI bài viết/bình luận thật sự bán/pass vé VÀ có thông tin vé cụ thể hữu ích cho người mua. Nếu là bình luận chỉ có SĐT, Zalo, giục inbox, hoặc giá tiền cộc lốc thì PHẢI để false.'
+      description: 'True nếu bài đăng/bình luận tìm người chơi cầu lông cùng, tuyển slot giao lưu, ghép team hoặc pass giờ sân'
+    },
+    matchesTargetLocation: {
+      type: Type.BOOLEAN,
+      description: 'True nếu sân/địa điểm chơi là sân 120 Định Công / Maxping Định Công, 488 Minh Khai, hoặc Tân Mai (kể cả viết tắt/teencode). False nếu là sân ở khu vực khác (như Nguyễn Xiển, Cầu Giấy...) hoặc không rõ.'
+    },
+    locationCategory: {
+      type: Type.STRING,
+      description: '120_DINH_CONG | 488_MINH_KHAI | TAN_MAI | OTHER'
+    },
+    venue: {
+      type: Type.STRING,
+      description: 'Tên sân/địa chỉ cụ thể (ví dụ: Sân Maxping Định Công - Sân 8)'
+    },
+    time: {
+      type: Type.STRING,
+      description: 'Thời gian / ca chơi / ngày (ví dụ: 08:30 - 10:30 sáng mai, ca 20h-22h tối T2-T4)'
+    },
+    slots: {
+      type: Type.STRING,
+      description: 'Số lượng người cần tuyển hoặc sẵn có (ví dụ: Tìm thêm 1 mảnh ghép, Sẵn 3 nam 4 nữ)'
+    },
+    gender: {
+      type: Type.STRING,
+      description: 'Giới tính (ví dụ: Nam/Nữ, Nam, Nữ, Full nữ...)'
+    },
+    level: {
+      type: Type.STRING,
+      description: 'Trình độ (ví dụ: Y/TBY, Nam: TBY-TB+, TB-, v.v.)'
+    },
+    shuttle: {
+      type: Type.STRING,
+      description: 'Loại cầu (ví dụ: Pro X, TC 77, 98-99%, Hải Yến...)'
+    },
+    fee: {
+      type: Type.STRING,
+      description: 'Chi phí (ví dụ: 35k, 65 cá, chia sân...)'
+    },
+    contact: {
+      type: Type.STRING,
+      description: 'Thông tin liên hệ: Zalo/SĐT/Inbox'
+    },
+    notes: {
+      type: Type.STRING,
+      description: 'Ghi chú thêm về nhóm (ví dụ: Vui vẻ, không drama, cố định...)'
+    },
+    summary: {
+      type: Type.STRING,
+      description: 'Tóm tắt ngắn gọn 1 câu tiếng Việt đầy đủ thông tin chính'
     },
     confidence: {
       type: Type.STRING,
       description: 'HIGH, MEDIUM, hoặc LOW'
     },
-    ticketType: {
-      type: Type.STRING,
-      description: 'Hạng vé (ví dụ: CAT 1, VIP, GA 2, Fanzone...) hoặc để trống nếu không rõ'
-    },
-    eventDay: {
-      type: Type.STRING,
-      description: 'Ngày diễn (ví dụ: Day 1, Day 2, 25/10...) hoặc để trống nếu không rõ'
-    },
-    price: {
-      type: Type.STRING,
-      description: 'Giá vé hoặc giá thương lượng nếu có'
-    },
-    quantity: {
-      type: Type.STRING,
-      description: 'Số lượng vé (ví dụ: 1 vé, 2 vé, 1 cặp)'
-    },
-    transactionMethod: {
-      type: Type.STRING,
-      description: 'Phương thức giao dịch (ví dụ: GDTT, GDTG, trực tiếp, dẫn vào sân)'
-    },
-    summary: {
-      type: Type.STRING,
-      description: 'Tóm tắt ngắn gọn 1 câu tiếng Việt (ví dụ: Pass 2 vé CAT 4 Day 1 giá gốc GDTT tại HN)'
-    },
     reason: {
       type: Type.STRING,
-      description: 'Lý do ngắn gọn tại sao đây là bài pass vé hoặc không phải'
+      description: 'Lý do xác định'
     }
   },
-  required: ['isTicketPass', 'confidence', 'summary']
+  required: ['isBadmintonMatch', 'matchesTargetLocation', 'summary', 'confidence']
 };
 
 /**
@@ -121,44 +143,68 @@ const BATCH_ITEMS_SCHEMA = {
             type: Type.STRING,
             description: 'ID của bài viết/bình luận tương ứng được gửi vào'
           },
-          isTicketPass: {
+          isBadmintonMatch: {
             type: Type.BOOLEAN,
-            description: 'True CHỈ KHI bài viết/bình luận thật sự bán/pass vé VÀ có thông tin vé cụ thể hữu ích cho người mua. Nếu là bình luận chỉ có SĐT, Zalo, giục inbox, hoặc giá tiền cộc lốc thì PHẢI để false.'
+            description: 'True nếu bài đăng/bình luận tìm người chơi cầu lông cùng'
+          },
+          matchesTargetLocation: {
+            type: Type.BOOLEAN,
+            description: 'True nếu sân là 120 Định Công/Maxping, 488 Minh Khai, hoặc Tân Mai'
+          },
+          locationCategory: {
+            type: Type.STRING,
+            description: '120_DINH_CONG | 488_MINH_KHAI | TAN_MAI | OTHER'
+          },
+          venue: {
+            type: Type.STRING,
+            description: 'Tên sân/địa chỉ'
+          },
+          time: {
+            type: Type.STRING,
+            description: 'Thời gian / ca chơi'
+          },
+          slots: {
+            type: Type.STRING,
+            description: 'Số lượng người tuyển/sẵn có'
+          },
+          gender: {
+            type: Type.STRING,
+            description: 'Giới tính'
+          },
+          level: {
+            type: Type.STRING,
+            description: 'Trình độ (Y, TBY, TB, K, C...)'
+          },
+          shuttle: {
+            type: Type.STRING,
+            description: 'Loại cầu'
+          },
+          fee: {
+            type: Type.STRING,
+            description: 'Chi phí'
+          },
+          contact: {
+            type: Type.STRING,
+            description: 'Liên hệ'
+          },
+          notes: {
+            type: Type.STRING,
+            description: 'Ghi chú'
+          },
+          summary: {
+            type: Type.STRING,
+            description: 'Tóm tắt 1 câu tiếng Việt'
           },
           confidence: {
             type: Type.STRING,
             description: 'HIGH, MEDIUM, hoặc LOW'
           },
-          ticketType: {
-            type: Type.STRING,
-            description: 'Hạng vé (ví dụ: CAT 1, VIP, GA 2...) hoặc để trống'
-          },
-          eventDay: {
-            type: Type.STRING,
-            description: 'Ngày diễn (ví dụ: Day 1, Day 2...) hoặc để trống'
-          },
-          price: {
-            type: Type.STRING,
-            description: 'Giá vé nếu có đề cập'
-          },
-          quantity: {
-            type: Type.STRING,
-            description: 'Số lượng vé (ví dụ: 1 vé, 2 vé)'
-          },
-          transactionMethod: {
-            type: Type.STRING,
-            description: 'Phương thức giao dịch (GDTT, GDTG, trực tiếp...)'
-          },
-          summary: {
-            type: Type.STRING,
-            description: 'Tóm tắt ngắn gọn 1 câu tiếng Việt'
-          },
           reason: {
             type: Type.STRING,
-            description: 'Lý do xác định'
+            description: 'Lý do'
           }
         },
-        required: ['id', 'isTicketPass', 'confidence', 'summary']
+        required: ['id', 'isBadmintonMatch', 'matchesTargetLocation', 'summary', 'confidence']
       }
     }
   },
@@ -169,14 +215,14 @@ const BATCH_ITEMS_SCHEMA = {
  * Formats an item into a structured prompt with parent post context
  */
 function formatItemForPrompt(item, index = 0) {
-  const cleanContent = (item.text || '').slice(0, 500);
+  const cleanContent = (item.text || '').slice(0, 600);
   let text = `--- BÀI [${index + 1}] (ID: "${item.id}") ---\n`;
   text += `Loại: ${item.type === 'COMMENT' ? 'BÌNH LUẬN (COMMENT)' : 'BÀI VIẾT (POST)'}\n`;
   text += `Người đăng: ${item.authorName || 'Ẩn danh'}\n`;
 
   if (item.type === 'COMMENT') {
     if (item.parentPostText) {
-      const parentSnippet = item.parentPostText.slice(0, 300);
+      const parentSnippet = item.parentPostText.slice(0, 350);
       text += `Ngữ cảnh bài viết gốc được bình luận vào:\n`;
       text += `  - Tác giả bài gốc: ${item.parentPostAuthor || 'Ẩn danh'}\n`;
       text += `  - Nội dung bài gốc: """${parentSnippet}"""\n`;
@@ -212,7 +258,7 @@ async function analyzeContent(text, meta = {}) {
       parentPostText: meta.parentPostText,
       parentPostAuthor: meta.parentPostAuthor
     };
-    const prompt = `Phân tích đối tượng sau theo các quy tắc nghiêm ngặt:\n\n${formatItemForPrompt(itemObj, 0)}`;
+    const prompt = `Phân tích đối tượng sau theo các quy tắc kiểm tra kèo cầu lông:\n\n${formatItemForPrompt(itemObj, 0)}`;
 
     const response = await client.models.generateContent({
       model: config.gemini.model,
@@ -221,7 +267,7 @@ async function analyzeContent(text, meta = {}) {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: 'application/json',
         responseJsonSchema: SINGLE_ITEM_SCHEMA,
-        abortSignal: AbortSignal.timeout(12000)
+        abortSignal: AbortSignal.timeout(15000)
       }
     });
 
@@ -250,7 +296,7 @@ async function analyzeBatch(items = []) {
   try {
     const formattedList = items.map((item, index) => formatItemForPrompt(item, index)).join('\n');
 
-    const prompt = `Hãy phân tích đồng thời danh sách ${items.length} bài viết/bình luận dưới đây và trả về mảng kết quả tương ứng với từng ID:\n\n${formattedList}`;
+    const prompt = `Hãy phân tích đồng thời danh sách ${items.length} bài viết/bình luận dưới đây để tìm các kèo cầu lông (đặc biệt tại sân 120 Định Công/Maxping, 488 Minh Khai, Tân Mai) và trả về mảng kết quả tương ứng với từng ID:\n\n${formattedList}`;
 
     const response = await client.models.generateContent({
       model: config.gemini.model,
@@ -259,7 +305,7 @@ async function analyzeBatch(items = []) {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: 'application/json',
         responseJsonSchema: BATCH_ITEMS_SCHEMA,
-        abortSignal: AbortSignal.timeout(20000)
+        abortSignal: AbortSignal.timeout(25000)
       }
     });
 
@@ -284,23 +330,25 @@ async function analyzeBatch(items = []) {
  * @returns {Array<string>}
  */
 function formatAiTags(aiResult) {
-  const tags = ['🏷️ PASS VÉ [AI]'];
+  const tags = [];
 
-  if (aiResult.ticketType) {
-    tags.push(`🎟️ ${aiResult.ticketType.toUpperCase()}`);
+  if (aiResult.locationCategory === '120_DINH_CONG') {
+    tags.push('📍 120 Định Công');
+  } else if (aiResult.locationCategory === '488_MINH_KHAI') {
+    tags.push('📍 488 Minh Khai');
+  } else if (aiResult.locationCategory === 'TAN_MAI') {
+    tags.push('📍 Tân Mai');
+  } else if (aiResult.venue) {
+    tags.push(`📍 ${aiResult.venue.slice(0, 25)}`);
+  } else {
+    tags.push('🏸 CẦU LÔNG');
   }
-  if (aiResult.eventDay) {
-    tags.push(`📅 ${aiResult.eventDay}`);
-  }
-  if (aiResult.quantity) {
-    tags.push(`🔢 ${aiResult.quantity}`);
-  }
-  if (aiResult.price) {
-    tags.push(`💰 ${aiResult.price}`);
-  }
-  if (aiResult.transactionMethod) {
-    tags.push(`🛡️ ${aiResult.transactionMethod}`);
-  }
+
+  if (aiResult.time) tags.push(`⏰ ${aiResult.time.slice(0, 20)}`);
+  if (aiResult.level) tags.push(`📊 ${aiResult.level.slice(0, 18)}`);
+  if (aiResult.fee) tags.push(`💰 ${aiResult.fee}`);
+  if (aiResult.shuttle) tags.push(`🪶 ${aiResult.shuttle.slice(0, 16)}`);
+  if (aiResult.slots) tags.push(`👥 ${aiResult.slots.slice(0, 18)}`);
 
   return tags;
 }
@@ -312,22 +360,10 @@ function formatAiTags(aiResult) {
  */
 function determineAiPriority(aiResult) {
   if (!aiResult) return 'NORMAL';
-  const method = (aiResult.transactionMethod || '').toLowerCase();
-  const type = (aiResult.ticketType || '').toLowerCase();
-
-  // Escrow or direct meetup or VIP ticket -> HIGH priority
-  if (
-    method.includes('gdtt') ||
-    method.includes('trực tiếp') ||
-    method.includes('gdtg') ||
-    method.includes('trung gian') ||
-    method.includes('dẫn vào') ||
-    type.includes('vip') ||
-    type.includes('svip')
-  ) {
+  const text = `${aiResult.time || ''} ${aiResult.slots || ''} ${aiResult.summary || ''}`.toLowerCase();
+  if (text.includes('tối nay') || text.includes('sáng mai') || text.includes('gấp') || text.includes('cuối')) {
     return 'HIGH';
   }
-
   return 'NORMAL';
 }
 
@@ -341,3 +377,4 @@ module.exports = {
   SINGLE_ITEM_SCHEMA,
   BATCH_ITEMS_SCHEMA
 };
+

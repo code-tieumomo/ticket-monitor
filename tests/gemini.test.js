@@ -2,12 +2,12 @@ const assert = require('assert');
 const config = require('../src/config');
 const gemini = require('../src/gemini');
 const { parseContent } = require('../src/parser');
+const { isActionableComment } = require('../src/crawler');
 
-console.log('--- Testing Gemini AI Module ---');
+console.log('--- Testing Gemini AI Badminton Module ---');
 
 // Test 1: Availability check
 {
-  // When no API key is provided
   const originalKey = config.gemini.apiKey;
   config.gemini.apiKey = '';
   assert.strictEqual(gemini.isAvailable(), false, 'Should be unavailable when key is empty');
@@ -21,139 +21,113 @@ console.log('--- Testing Gemini AI Module ---');
 // Test 2: AI Tag formatting
 {
   const mockAiResult = {
-    isTicketPass: true,
-    confidence: 'HIGH',
-    ticketType: 'VIP 1',
-    eventDay: 'Day 1',
-    quantity: '2 vé',
-    price: '2.5tr',
-    transactionMethod: 'GDTT tại HN',
-    summary: 'Pass 2 vé VIP 1 Day 1 giá 2.5tr GDTT tại HN'
+    isBadmintonMatch: true,
+    matchesTargetLocation: true,
+    locationCategory: '120_DINH_CONG',
+    venue: 'Sân Maxping Định Công - Sân 8',
+    time: '8:30 - 10:30 (Sáng mai)',
+    slots: 'Tuyển 1-2 slot',
+    gender: 'Nam / Nữ',
+    level: 'Y / TBY',
+    fee: '35k',
+    shuttle: 'Cầu 98-99%',
+    summary: 'Tuyển giao lưu sáng mai 8h30-10h30 sân Maxping Định Công 35k'
   };
 
   const tags = gemini.formatAiTags(mockAiResult);
-  assert(tags.includes('🏷️ PASS VÉ [AI]'), 'Must include AI base tag');
-  assert(tags.some(t => t.includes('VIP 1')), 'Must include VIP 1');
-  assert(tags.some(t => t.includes('Day 1')), 'Must include Day 1');
-  assert(tags.some(t => t.includes('2 vé')), 'Must include quantity');
-  assert(tags.some(t => t.includes('2.5tr')), 'Must include price');
-  assert(tags.some(t => t.includes('GDTT')), 'Must include GDTT');
+  assert(tags.some(t => t.includes('120 Định Công')), 'Must include 120 Định Công tag');
+  assert(tags.some(t => t.includes('8:30')), 'Must include time tag');
+  assert(tags.some(t => t.includes('Y / TBY')), 'Must include level tag');
+  assert(tags.some(t => t.includes('35k')), 'Must include fee tag');
+  assert(tags.some(t => t.includes('98-99%')), 'Must include shuttle tag');
   console.log('✅ Passed Test 2: AI tag formatting helper');
 }
 
 // Test 3: Priority determination
 {
-  const highResult = {
-    transactionMethod: 'GDTT tại SVĐ',
-    ticketType: 'VIP'
+  const urgentResult = {
+    time: '20h-22h tối nay',
+    slots: 'Tìm gấp 1 mảnh ghép cuối',
+    summary: 'Tối nay cần gấp'
   };
-  assert.strictEqual(gemini.determineAiPriority(highResult), 'HIGH', 'GDTT should trigger HIGH priority');
+  assert.strictEqual(gemini.determineAiPriority(urgentResult), 'HIGH', 'Tối nay / gấp should trigger HIGH priority');
 
-  const normalResult = {
-    transactionMethod: 'chuyển khoản',
-    ticketType: 'CAT 4'
+  const regularResult = {
+    time: 'Chủ Nhật tuần sau 8h-10h',
+    slots: 'Tuyển thành viên dài hạn',
+    summary: 'Tuyển cố định tuần sau'
   };
-  assert.strictEqual(gemini.determineAiPriority(normalResult), 'NORMAL', 'Standard post should have NORMAL priority');
+  assert.strictEqual(gemini.determineAiPriority(regularResult), 'NORMAL', 'Standard future post should be NORMAL priority');
   console.log('✅ Passed Test 3: AI priority determination');
 }
 
-// Test 4: Verify why Gemini is needed (Demonstrate Regex blind spots)
+// Test 4: Comment Actionability Pre-Filter
 {
-  // Tricky case A: "nhả lại 2 slot" (colloquial Vietnamese slang missed by standard sell action regex)
-  const textA = 'Mình bận đột xuất hôm 15 ko đi concert được, nhả lại 2 slot cho ai cần, gdtt tại cổng svđ ạ';
-  const regexResultA = parseContent(textA);
-  // Regex missed it because "nhả lại" was not in the rigid sellAction regex list
-  assert.strictEqual(regexResultA.isMatch, false, 'Regex misses "nhả lại 2 slot" - Gemini rescue needed');
-  console.log('✅ Passed Test 4A: Verified Regex limitation on colloquial "nhả lại slot"');
+  // Useless spam comments
+  assert.strictEqual(isActionableComment('ib zalo 0987654321'), false, 'Reject bare inbox/zalo');
+  assert.strictEqual(isActionableComment('chấm'), false, 'Reject chấm');
+  assert.strictEqual(isActionableComment('.'), false, 'Reject dot');
+  assert.strictEqual(isActionableComment('xin giá'), false, 'Reject xin giá');
+  assert.strictEqual(isActionableComment('35k'), false, 'Reject bare price without context');
 
-  // Tricky case B: Comment "Chấm ké thừa 1 vé khán đài b d1"
-  const textB = 'Chấm ké, e thừa 1 vé khán đài b d1 nhé, check ib e gửi mã';
-  const regexResultB = parseContent(textB);
-  assert.strictEqual(regexResultB.isMatch, false, 'Regex misses casual comment "thừa 1 vé" - Gemini rescue needed');
-  console.log('✅ Passed Test 4B: Verified Regex limitation on casual comment "thừa 1 vé"');
-}
-
-// Test 5: Verify Comment Actionability and Parent Context Filtering
-{
-  const { isActionableComment } = require('../src/crawler');
-
-  // Case 1: BraveKoala6952 - "0912345678 liên hệ zalo" (Unrelated, bare contact)
+  // Actionable comments
   assert.strictEqual(
-    isActionableComment('0912345678 liên hệ zalo'),
-    false,
-    'Should reject bare phone number/contact drop'
-  );
-
-  // Case 2: Tâm Đỗ - "40tr" (Unrelated, bare price without ticket info)
-  assert.strictEqual(
-    isActionableComment('40tr'),
-    false,
-    'Should reject bare price without ticket info'
-  );
-  assert.strictEqual(
-    isActionableComment('40 triệu'),
-    false,
-    'Should reject bare 40 triệu'
-  );
-
-  // Case 3: Tiến Bùi - "inbox zalo 09..." (Unrelated, bare contact)
-  assert.strictEqual(
-    isActionableComment('inbox zalo 0987654321'),
-    false,
-    'Should reject bare inbox zalo'
-  );
-
-  // Case 4: Người tham gia ẩn danh 613 - "Yêu cầu inbox qua sđt"
-  assert.strictEqual(
-    isActionableComment('ib sđt 0912345678 nha'),
-    false,
-    'Should reject bare contact'
-  );
-
-  // Case 5: CharmingParrot9732 - Actionable ticket pass with concrete tier & day
-  assert.strictEqual(
-    isActionableComment('Pass lại cặp vé CAT 2 hàng F ngày 2 nếu được giá'),
+    isActionableComment('Sân 120 Định Công bên mình còn 2 slot ca 20-22h nhé'),
     true,
-    'Should ACCEPT actionable comment with CAT 2 and Day 2'
+    'Accept actionable comment offering slot at target venue'
   );
-
-  console.log('✅ Passed Test 5: Verified Comment Actionability Pre-Filter on User Examples');
+  assert.strictEqual(
+    isActionableComment('Mình xin 1 slot nam trình TBY nhé b ơi'),
+    true,
+    'Accept actionable comment seeking slot with level'
+  );
+  console.log('✅ Passed Test 4: Comment Actionability Pre-Filter');
 }
 
-// Test 6: Live API test if GEMINI_API_KEY is present
+// Test 5: Live API test with real badminton examples
 (async () => {
   if (config.gemini.apiKey && config.gemini.apiKey.trim() !== '') {
     console.log('\n[Gemini Live Test] Phát hiện GEMINI_API_KEY. Đang gọi thử model...');
     try {
-      // Test 6A: Actionable comment under buyer post
-      const parentPost = 'Cần mua 2 vé concert G-Dragon Day 2 ai có pass ib mình nhé!';
-      const commentActionable = 'Mình pass lại cặp vé CAT 2 hàng F ngày 2 nếu được giá!';
-      const resActionable = await gemini.analyzeContent(commentActionable, {
-        authorName: 'CharmingParrot9732',
-        type: 'COMMENT',
-        parentPostAuthor: 'Minh Quan',
-        parentPostText: parentPost
-      });
-      console.log('Kết quả Gemini cho comment hữu ích (CharmingParrot9732):', resActionable);
-      assert.strictEqual(resActionable.isTicketPass, true, 'Gemini must recognize actionable ticket offer');
+      // Test 5A: Real User Example 4 (Sân Maxping Định Công)
+      const postText = `🏸 TUYỂN GIAO LƯU SÁNG MAI 35K
+Sân Maxping Định Công
+⏰ 8:30 - 10:30
+🏸 Nam/Nữ – Y/TBY: 35K
+🏟️ Sân Max 8
+🪶 Cầu 98–99%
+Liên hệ tuiii nha💓`;
 
-      // Test 6B: Useless / Vague comment under buyer post
-      const commentVague = '0988123456 liên hệ zalo trao đổi';
-      const resVague = await gemini.analyzeContent(commentVague, {
-        authorName: 'BraveKoala6952',
-        type: 'COMMENT',
-        parentPostAuthor: 'Minh Quan',
-        parentPostText: parentPost
+      const res = await gemini.analyzeContent(postText, {
+        authorName: 'Thùy Trang',
+        type: 'POST'
       });
-      console.log('Kết quả Gemini cho comment rác (BraveKoala6952):', resVague);
-      assert.strictEqual(resVague.isTicketPass, false, 'Gemini must reject bare contact without ticket details');
+      console.log('Kết quả Gemini cho bài Sân Maxping Định Công:', res);
+      assert(res, 'Must return result object');
+      assert.strictEqual(res.isBadmintonMatch, true, 'Gemini must recognize badminton game');
+      assert.strictEqual(res.matchesTargetLocation, true, 'Gemini must recognize Maxping is in Dinh Cong area');
+      console.log('✅ Passed Test 5A: Live Gemini recognized Sân Maxping Định Công & extracted details');
 
-      console.log('✅ Passed Test 6: Live Gemini API verified with parent post context!');
+      // Test 5B: Real User Example 1 (Nguyễn Xiển - Other location)
+      const nonTargetText = `sẵn 3 nam 4 nữ tìm thêm 1 mảnh ghép cuối ca 0-2h bmc ng xiển
+nam tb- tb 65 cá
+đánh cầu pro X`;
+
+      const resNonTarget = await gemini.analyzeContent(nonTargetText, {
+        authorName: 'Tuấn Anh',
+        type: 'POST'
+      });
+      console.log('Kết quả Gemini cho bài BMC Nguyễn Xiển:', resNonTarget);
+      assert(resNonTarget, 'Must return result object');
+      assert.strictEqual(resNonTarget.isBadmintonMatch, true, 'Gemini must recognize badminton game');
+      assert.strictEqual(resNonTarget.matchesTargetLocation, false, 'Gemini must recognize Nguyễn Xiển is NOT in target locations');
+      console.log('✅ Passed Test 5B: Live Gemini correctly identified BMC Nguyễn Xiển as non-target location');
+
     } catch (err) {
       console.warn('⚠️ Lỗi gọi thử Gemini Live API:', err.message);
     }
   } else {
-    console.log('ℹ️ Bỏ qua Test 6 (Live Gemini API) vì GEMINI_API_KEY chưa được cấu hình trong .env.');
+    console.log('ℹ️ Bỏ qua Test 5 (Live Gemini API) vì GEMINI_API_KEY chưa được cấu hình.');
   }
 
   console.log('🎉 Gemini module test completed successfully!\n');

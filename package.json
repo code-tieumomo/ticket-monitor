@@ -1,7 +1,7 @@
 {
-  "name": "fb-ticket-monitor",
+  "name": "fb-badminton-monitor",
   "version": "1.0.0",
-  "description": "Facebook Group Concert Ticket Monitor using Playwright & Telegram Bot",
+  "description": "Facebook Group Badminton Pickup Match Monitor using Playwright, Gemini AI & Telegram Bot",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

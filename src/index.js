@@ -37,9 +37,10 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 async function main() {
   console.log('================================================================');
-  console.log('🎫 HỆ THỐNG GIÁM SÁT VÀ BÁO ĐỘNG VÉ CONCERT FACEBOOK GROUP');
+  console.log('🏸 HỆ THỐNG TÌM KÈO GIAO LƯU CẦU LÔNG (120 Định Công / 488 Minh Khai / Tân Mai)');
   console.log('================================================================');
   console.log(`⏱️ Chu kỳ quét: ${config.crawler.baseIntervalSec}s + Jitter (${config.crawler.jitterMinSec}s - ${config.crawler.jitterMaxSec}s)`);
+  console.log(`📍 Sân mục tiêu: 120 Định Công / Maxping, 488 Minh Khai, Tân Mai (Lọc khu vực: ${config.filterByTargetLocation ? 'Bật' : 'Tắt'})`);
   console.log(`📂 Danh sách nhóm theo dõi (${config.groups.length} nhóm):`);
   config.groups.forEach((g, idx) => {
     console.log(`   ${idx + 1}. [${g.id}] ${g.name}: ${g.url}`);
@@ -51,7 +52,7 @@ async function main() {
   console.log('================================================================\n');
 
   if (!gemini.isAvailable()) {
-    console.log('💡 [Gợi ý] Thêm GEMINI_API_KEY vào .env để kích hoạt AI lọc thông minh (gemini-2.5-flash-lite), giúp không bỏ sót bất kỳ bài pass vé nào!');
+    console.log('💡 [Gợi ý] Thêm GEMINI_API_KEY vào .env để kích hoạt AI trích xuất thông tin chi tiết (giờ chơi, số lượng nam/nữ, trình độ, loại cầu...)');
     console.log('----------------------------------------------------------------\n');
   }
 
@@ -65,7 +66,7 @@ async function main() {
   } else {
     await sendSystemAlert(
       'Hệ thống khởi động',
-      `Bot giám sát vé concert đã bắt đầu hoạt động trên ${config.groups.length} nhóm Facebook.`
+      `Bot tìm kèo cầu lông (120 Định Công / 488 Minh Khai / Tân Mai) đã bắt đầu hoạt động trên ${config.groups.length} nhóm Facebook.`
     ).catch(() => {});
   }
 

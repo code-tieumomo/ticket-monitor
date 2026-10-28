@@ -23,7 +23,7 @@ function cleanContentForTelegram(content = '') {
 }
 
 /**
- * Sends a ticket alert message to Telegram
+ * Sends a badminton match alert message to Telegram
  * @param {object} param0 
  */
 async function sendAlert({
@@ -37,7 +37,9 @@ async function sendAlert({
   aiSummary = null,
   detectedBy = 'REGEX',
   parentPostText = null,
-  parentPostAuthor = null
+  parentPostAuthor = null,
+  details = {},
+  locationCategory = null
 }) {
   const { botToken, chatId } = config.telegram;
 
@@ -48,56 +50,73 @@ async function sendAlert({
   }
 
   const cleaned = cleanContentForTelegram(content);
-  const shortContent = cleaned.length > 600 ? cleaned.slice(0, 597) + '...' : cleaned;
+  const shortContent = cleaned.length > 500 ? cleaned.slice(0, 497) + '...' : cleaned;
   const isHighPriority = priority === 'HIGH';
   const isAiDetected = detectedBy === 'GEMINI';
   const isComment = type === 'COMMENT';
-  const headerIcon = isHighPriority ? '🚨🔥' : (isAiDetected ? '🤖✨' : '📢');
-  const priorityText = isHighPriority ? ' [ƯU TIÊN CAO - CÓ GDTT/TRUNG GIAN]' : '';
+  const headerIcon = isHighPriority ? '🔥🏸' : '🏸✨';
+  const priorityTag = isHighPriority ? ' [GẤP / HÔM NAY]' : '';
 
-  const tagsFormatted = tags.length > 0 
-    ? tags.map(t => `<b>${escapeHtml(t)}</b>`).join('  ') 
-    : '<i>Không có tag cụ thể</i>';
+  // Location display
+  let locationLabel = '';
+  if (locationCategory === '120_DINH_CONG' || (details && details.venue && /định công|maxping/i.test(details.venue))) {
+    locationLabel = ' [120 Định Công]';
+  } else if (locationCategory === '488_MINH_KHAI' || (details && details.venue && /minh khai/i.test(details.venue))) {
+    locationLabel = ' [488 Minh Khai]';
+  } else if (locationCategory === 'TAN_MAI' || (details && details.venue && /tân mai|tm\b/i.test(details.venue))) {
+    locationLabel = ' [Tân Mai]';
+  }
 
   const typeLabel = isComment ? '💬 Bình luận' : '📝 Bài viết';
   const authorLabel = isComment ? '👤 <b>Người bình luận:</b>' : '👤 <b>Người đăng:</b>';
-  const filterLabel = isAiDetected 
-    ? '🤖 <b>Phát hiện bởi:</b> Gemini 2.5 Flash Lite <i>(AI lọc thông minh)</i>' 
-    : '⚡ <b>Phát hiện bởi:</b> Bộ lọc từ khóa Regex';
 
   const messageLines = [
-    `${headerIcon} <b>PHÁT HIỆN KÈO PASS VÉ MỚI!</b>${priorityText}`,
+    `${headerIcon} <b>KÈO GIAO LƯU CẦU LÔNG MỚI!</b>${locationLabel}${priorityTag}`,
     `📌 <b>Nhóm:</b> ${escapeHtml(groupName)} | <b>Loại:</b> ${typeLabel}`,
     `${authorLabel} ${escapeHtml(authorName)}`,
+    ``
   ];
 
   if (isComment && parentPostText) {
     const cleanParent = cleanContentForTelegram(parentPostText);
-    const shortParent = cleanParent.length > 200 ? cleanParent.slice(0, 197) + '...' : cleanParent;
+    const shortParent = cleanParent.length > 180 ? cleanParent.slice(0, 177) + '...' : cleanParent;
     const authorSnippet = parentPostAuthor ? ` (bởi ${escapeHtml(parentPostAuthor)})` : '';
-    messageLines.push(`📝 <b>Bài viết gốc:</b> <i>&quot;${escapeHtml(shortParent)}&quot;${authorSnippet}</i>`);
+    messageLines.push(
+      `📝 <b>Bài viết gốc:</b> <i>&quot;${escapeHtml(shortParent)}&quot;${authorSnippet}</i>`,
+      ``
+    );
   }
 
-  messageLines.push(
-    filterLabel,
-    `🏷 <b>Nhận diện:</b> ${tagsFormatted}`,
-  );
+  // Key Badminton Information extracted for instant reading
+  const d = details || {};
+  const infoLines = [];
+  if (d.venue) infoLines.push(`📍 <b>Sân:</b> ${escapeHtml(d.venue)}`);
+  if (d.time) infoLines.push(`⏰ <b>Giờ chơi:</b> ${escapeHtml(d.time)}`);
+  if (d.slots) infoLines.push(`👥 <b>Số lượng:</b> ${escapeHtml(d.slots)}`);
+  if (d.gender) infoLines.push(`🚻 <b>Giới tính:</b> ${escapeHtml(d.gender)}`);
+  if (d.level) infoLines.push(`📊 <b>Trình độ:</b> ${escapeHtml(d.level)}`);
+  if (d.shuttle) infoLines.push(`🪶 <b>Loại cầu:</b> ${escapeHtml(d.shuttle)}`);
+  if (d.fee) infoLines.push(`💰 <b>Chi phí:</b> ${escapeHtml(d.fee)}`);
+  if (d.contact) infoLines.push(`📞 <b>Liên hệ:</b> ${escapeHtml(d.contact)}`);
+  if (d.notes) infoLines.push(`📝 <b>Ghi chú:</b> ${escapeHtml(d.notes)}`);
+
+  if (infoLines.length > 0) {
+    messageLines.push(...infoLines);
+    messageLines.push(``);
+  }
 
   if (aiSummary) {
-    messageLines.push(`💡 <b>AI Tóm tắt:</b> <i>${escapeHtml(aiSummary)}</i>`);
+    messageLines.push(`💡 <b>AI Tóm tắt:</b> <i>${escapeHtml(aiSummary)}</i>`, ``);
   }
 
-  const contentHeader = isComment ? `💬 <b>Nội dung bình luận:</b>` : `📋 <b>Nội dung:</b>`;
+  const contentHeader = isComment ? `💬 <b>Nội dung bình luận:</b>` : `📋 <b>Nội dung bài đăng:</b>`;
   const linkLabel = isComment ? `👉 BẤM VÀO ĐÂY ĐỂ XEM BÌNH LUẬN TRÊN FACEBOOK` : `👉 BẤM VÀO ĐÂY ĐỂ MỞ BÀI ĐĂNG TRÊN FACEBOOK`;
 
   messageLines.push(
-    ``,
     contentHeader,
     `<code>${escapeHtml(shortContent)}</code>`,
     ``,
-    `🔗 <a href="${url}"><b>${linkLabel}</b></a>`,
-    ``,
-    `⚠️ <i>Lưu ý an toàn: Chỉ giao dịch trực tiếp mặt đối mặt hoặc qua trung gian uy tín (GDTG). Tuyệt đối KHÔNG chuyển cọc trước dưới mọi hình thức!</i>`
+    `🔗 <a href="${url}"><b>${linkLabel}</b></a>`
   );
 
   const htmlMessage = messageLines.join('\n');

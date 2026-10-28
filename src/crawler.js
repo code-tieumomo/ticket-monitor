@@ -123,14 +123,14 @@ function isCheckpointOrLoginPage(url, pageTitle, bodyText) {
 }
 
 /**
- * Filters out useless comments (bare phone numbers, bare prices like "40tr", 1-word inbox spam)
+ * Filters out useless comments (bare phone numbers, bare prices like "40k", 1-word inbox spam)
  * @param {string} text 
  * @returns {boolean}
  */
 function isActionableComment(text) {
   if (!text || typeof text !== 'string') return false;
   const clean = text.trim();
-  if (clean.length < 5) return false;
+  if (clean.length < 3) return false;
 
   const lower = clean.toLowerCase();
 
@@ -139,20 +139,20 @@ function isActionableComment(text) {
     return false;
   }
 
-  // 2. Reject bare prices like "40tr", "40 triệu", "500k", "1tr5" without ticket clues
-  if (/^\d+([.,]\d+)?\s*(tr|triệu|k|m|củ|cu|đ|vnd|vnđ)?$/i.test(clean)) {
+  // 2. Reject bare prices like "35k", "65 cá" without any other clues
+  if (/^\d+([.,]\d+)?\s*(k|cá|ca|đ|vnd|vnđ)?$/i.test(clean)) {
     return false;
   }
 
-  // 3. Must contain at least one ticket/slot/pass clue
-  const hasTicketClue = /(vé|ve|ticket|cat\s*[1-8]|vip|svip|vvip|ga\s*[1-5]|fanzone|khán đài|khan dai|slot|ghế|ghe|seat|standing|seated|day\s*[1-4]|d[1-4]|ngày\s*[1-4]|pass|nhượng|nhuong|bán|để lại)/i.test(lower);
-  if (!hasTicketClue) {
+  // 3. Must contain at least one badminton clue
+  const hasBadmintonClue = /(sân|san|cầu|cau|slot|ca\s*\d|đánh|danh|giao\s*lưu|gl\b|glcl|tuyển|tuyen|ghép|ghep|chân|bạn|mem|nam|nữ|tby|tb-|tb\+|tb\b|\by\b|\bk\b|\bc\b|vãng\s*lai|cố\s*định|định\s*công|minh\s*khai|tân\s*mai|maxping|120|488|tm\b|dc\b|mk\b)/i.test(lower);
+  if (!hasBadmintonClue) {
     return false;
   }
 
-  // 4. Reject bare contact drops without concrete tier/day/slot info (e.g. "0912345678 zalo", "ib số này nha")
+  // 4. Reject bare contact drops without slot or court info (e.g. "0912345678 zalo", "ib số này nha")
   const digitsOnly = clean.replace(/\D/g, '');
-  if (digitsOnly.length >= 9 && clean.length <= 30 && !/(cat|vip|ga|day|d[1-4]|hàng|slot)/i.test(lower)) {
+  if (digitsOnly.length >= 9 && clean.length <= 30 && !/(sân|slot|ca|định\s*công|minh\s*khai|tân\s*mai|nam|nữ|tby|tb|k\b)/i.test(lower)) {
     return false;
   }
 
@@ -431,11 +431,14 @@ async function runCrawlCycle() {
           }
 
           const itemWithId = { ...item, id: itemId, cleanUrl, fingerprint };
-          const analysis = parseContent(item.text);
+          const analysis = parseContent(item.text, {
+            parentPostText: item.parentPostText,
+            parentPostAuthor: item.parentPostAuthor
+          });
 
           if (analysis.isMatch) {
             matchedCount++;
-            console.log(`  🎯 [KHỚP VÉ] [${item.type}] Bởi: ${item.authorName} | Tags: ${analysis.tags.join(', ')}`);
+            console.log(`  🎯 [KHỚP KÈO CẦU LÔNG] [${item.type}] Bởi: ${item.authorName} | Sân: ${analysis.details?.venue || analysis.venueCategory} | Tags: ${analysis.tags.join(', ')}`);
 
             // Save to database
             db.insertItem({
@@ -460,15 +463,17 @@ async function runCrawlCycle() {
               priority: analysis.priority,
               detectedBy: 'REGEX',
               parentPostText: item.parentPostText,
-              parentPostAuthor: item.parentPostAuthor
+              parentPostAuthor: item.parentPostAuthor,
+              details: analysis.details,
+              locationCategory: analysis.venueCategory
             });
           } else {
-            // Save unmatched item for Gemini AI second-opinion check to avoid missing tickets
+            // Save unmatched item for Gemini AI second-opinion check to avoid missing matches
             candidateUnmatchedItems.push(itemWithId);
           }
         }
 
-        // Step 2: Use Gemini AI to catch any tickets missed by regex rules
+        // Step 2: Use Gemini AI to catch any matches missed by regex rules
         if (candidateUnmatchedItems.length > 0) {
           if (gemini.isAvailable()) {
             console.log(`  🤖 [Gemini AI] Đang kiểm tra sâu ${candidateUnmatchedItems.length} bài chưa khớp regex để tránh bỏ sót...`);
@@ -477,12 +482,14 @@ async function runCrawlCycle() {
             for (const item of candidateUnmatchedItems) {
               const ai = aiResults.get(item.id);
 
-              if (ai && ai.isTicketPass) {
+              const isLocationMatched = config.filterByTargetLocation ? ai?.matchesTargetLocation : true;
+
+              if (ai && ai.isBadmintonMatch && isLocationMatched) {
                 matchedCount++;
                 const aiTags = gemini.formatAiTags(ai);
                 const priority = gemini.determineAiPriority(ai);
 
-                console.log(`  🎯 [KHỚP VÉ - GEMINI AI] [${item.type}] Bởi: ${item.authorName} | Tags: ${aiTags.join(', ')} | AI: ${ai.summary}`);
+                console.log(`  🎯 [KHỚP KÈO CẦU LÔNG - GEMINI AI] [${item.type}] Bởi: ${item.authorName} | Sân: ${ai.venue || ai.locationCategory} | Tags: ${aiTags.join(', ')} | AI: ${ai.summary}`);
 
                 // Save to database
                 db.insertItem({
@@ -508,7 +515,9 @@ async function runCrawlCycle() {
                   aiSummary: ai.summary,
                   detectedBy: 'GEMINI',
                   parentPostText: item.parentPostText,
-                  parentPostAuthor: item.parentPostAuthor
+                  parentPostAuthor: item.parentPostAuthor,
+                  details: ai,
+                  locationCategory: ai.locationCategory
                 });
               } else {
                 // Verified as non-match by AI (or AI not confident)
@@ -541,7 +550,7 @@ async function runCrawlCycle() {
           }
         }
 
-        console.log(`  -> Xử lý xong: ${matchedCount} thông báo vé mới.`);
+        console.log(`  -> Xử lý xong: ${matchedCount} thông báo kèo cầu lông mới.`);
 
       } catch (groupErr) {
         console.error(`  ❌ Lỗi khi quét nhóm [${group.id}]:`, groupErr.message);
