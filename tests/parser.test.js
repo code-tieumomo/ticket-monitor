@@ -92,4 +92,28 @@ nam tb- tb 65 cá
   console.log('✅ Passed Test Case 8: Handle empty inputs safely');
 }
 
+// Test Case 9: User's Maxping 120 Định Công example (Ensure level is never falsely parsed as 'c')
+{
+  const textTruncated = `TUYỂN GẤP 2SL GIAO LƯU SÁNG MAI T6 30/10
+SÂN Maxping 120 Định công
+Thời gian: 8:30-10:30`;
+  const resTrunc = parseContent(textTruncated);
+  assert.notStrictEqual(resTrunc.details.level, 'c', 'Must not match "c" from "Định công"');
+
+  const textFull = `TUYỂN GẤP 2SL GIAO LƯU SÁNG MAI T6 30/10
+SÂN Maxping 120 Định công
+⏰Thời gian: 8:30-10:30
+🏸Trình: Tby ,Tb-
+Sân sẵn nữ
+Cầu 3sao proX
+Nữ 50 nam 65
+Liên hệ mess ạ😗`;
+  const resFull = parseContent(textFull);
+  assert.strictEqual(resFull.isMatch, true);
+  assert(resFull.details.level.includes('Tby'), 'Level must extract Tby');
+  assert(resFull.details.slots.includes('2'), 'Slots must extract 2');
+  assert.strictEqual(resFull.venueCategory, '120_DINH_CONG');
+  console.log('✅ Passed Test Case 9: User Maxping 120 Định Công example correctly parsed');
+}
+
 console.log('🎉 All Badminton Parser tests passed successfully!\n');

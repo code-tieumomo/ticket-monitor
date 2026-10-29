@@ -258,22 +258,35 @@ async function runCrawlCycle() {
           return { success: false, reason: 'checkpoint_detected' };
         }
 
+        // Helper to expand all "Xem thêm" / "See more" buttons on page
+        const expandSeeMoreOnPage = async () => {
+          await page.evaluate(() => {
+            const candidates = Array.from(document.querySelectorAll('div[role="button"], span[role="button"], [role="button"], div[dir="auto"] span'));
+            for (const el of candidates) {
+              const text = (el.innerText || '').trim();
+              if (/(?:xem\s*thêm|see\s*more)/i.test(text) && text.length < 35) {
+                try {
+                  el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                  el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                  el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                  el.click();
+                } catch {}
+              }
+            }
+          });
+        };
+
         // Progressive scrolling to load enough posts and expand hidden text ("Xem thêm")
         const scrollRounds = Math.min(Math.max(Math.ceil(config.crawler.maxPostsPerGroup / 4), 2), 6);
         for (let s = 0; s < scrollRounds; s++) {
-          await page.evaluate(() => {
-            // Expand "Xem thêm" / "See more" buttons so full court & match details are visible
-            const buttons = Array.from(document.querySelectorAll('div[role="button"]'));
-            for (const b of buttons) {
-              const text = (b.innerText || '').trim();
-              if (text === 'Xem thêm' || text === 'See more') {
-                try { b.click(); } catch {}
-              }
-            }
-            window.scrollBy(0, 2500);
-          });
+          await expandSeeMoreOnPage();
+          await page.evaluate(() => window.scrollBy(0, 2500));
           await page.waitForTimeout(1800);
         }
+
+        // Final pass to expand any remaining collapsed posts before extracting items
+        await expandSeeMoreOnPage();
+        await page.waitForTimeout(1000);
 
         // Extract feed posts & comments
         const items = await page.evaluate((maxPosts) => {
@@ -287,6 +300,18 @@ async function runCrawlCycle() {
             : Array.from(document.querySelectorAll('div[role="article"], div[data-pagelet*="FeedUnit"]'));
 
           for (const container of candidateElements) {
+            // Expand "Xem thêm" within this specific container if still collapsed
+            const seeMoreBtns = container.querySelectorAll('div[role="button"], span[role="button"], [role="button"], span');
+            for (const btn of seeMoreBtns) {
+              const bText = (btn.innerText || '').trim();
+              if (/(?:xem\s*thêm|see\s*more)/i.test(bText) && bText.length < 35) {
+                try {
+                  btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                  btn.click();
+                } catch {}
+              }
+            }
+
             const fullText = (container.innerText || '').trim();
             if (fullText.length < 25) continue;
             
@@ -343,13 +368,17 @@ async function runCrawlCycle() {
                 if (/^[·•\-_*]$/.test(l)) return false;
                 // Filter out Facebook anti-bot scrambled letters
                 if (l.replace(/[\u0300-\u036f\u200b-\u200f\ufeff]/g, '').trim().length <= 1) return false;
-                if (l === author) return false;
-                if (/^(theo dõi|follow|đã chia sẻ bài viết|thích|like|bình luận|comment|chia sẻ|share|viết câu trả lời|viết bình luận|xem thêm)/i.test(l)) return false;
-                if (/^có thể là hình ảnh về/i.test(l)) return false;
-                if (/^(khoảng\s*)?\d+\s*(giây|phút|giờ|ngày|tháng|h|m|s|min)\s*(trước)?$/i.test(l)) return false;
-                if (/^trả lời$/i.test(l)) return false;
+                let lClean = l.replace(/[….]*\s*(?:xem\s*thêm|see\s*more)\s*$/i, '').trim();
+                if (!lClean) return false;
+                if (lClean === author) return false;
+                if (/^(theo dõi|follow|đã chia sẻ bài viết|thích|like|bình luận|comment|chia sẻ|share|viết câu trả lời|viết bình luận)/i.test(lClean)) return false;
+                if (/(?:xem\s*thêm|see\s*more)/i.test(lClean) && lClean.length < 25) return false;
+                if (/^có thể là hình ảnh về/i.test(lClean)) return false;
+                if (/^(khoảng\s*)?\d+\s*(giây|phút|giờ|ngày|tháng|h|m|s|min)\s*(trước)?$/i.test(lClean)) return false;
+                if (/^trả lời$/i.test(lClean)) return false;
                 return true;
-              });
+              })
+              .map(l => l.replace(/[….]*\s*(?:xem\s*thêm|see\s*more)\s*$/i, '').trim());
 
             const cleanPostText = lines.join('\n').trim();
 
@@ -415,7 +444,7 @@ async function runCrawlCycle() {
         console.log(`  -> Tìm thấy ${items.length} bài viết/bình luận gần nhất.`);
 
         let matchedCount = 0;
-        const candidateUnmatchedItems = [];
+        const candidateItems = [];
 
         // Step 1: Fast evaluation with Regex rules & comment pre-filter
         for (const item of items) {
@@ -443,68 +472,153 @@ async function runCrawlCycle() {
             continue;
           }
 
-          const itemWithId = { ...item, id: itemId, cleanUrl, fingerprint };
-          const analysis = parseContent(item.text, {
+          // Preliminary regex analysis (for fast check and fallback)
+          const regexAnalysis = parseContent(item.text, {
             parentPostText: item.parentPostText,
             parentPostAuthor: item.parentPostAuthor
           });
 
-          if (analysis.isMatch) {
-            matchedCount++;
-            console.log(`  🎯 [KHỚP KÈO CẦU LÔNG] [${item.type}] Bởi: ${item.authorName} | Sân: ${analysis.details?.venue || analysis.venueCategory} | Tags: ${analysis.tags.join(', ')}`);
-
-            // Save to database
-            db.insertItem({
-              id: itemId,
-              group_id: group.id,
-              item_type: item.type,
-              author_name: item.authorName,
-              content: item.text,
-              post_url: cleanUrl,
-              tags: analysis.tags,
-              content_hash: fingerprint
-            });
-
-            // Dispatch alert to Telegram
-            await sendAlert({
-              groupName: group.name,
-              type: item.type,
-              authorName: item.authorName,
-              content: item.text,
-              url: cleanUrl,
-              tags: analysis.tags,
-              priority: analysis.priority,
-              detectedBy: 'REGEX',
-              parentPostText: item.parentPostText,
-              parentPostAuthor: item.parentPostAuthor,
-              details: analysis.details,
-              locationCategory: analysis.venueCategory
-            });
-          } else {
-            // Save unmatched item for Gemini AI second-opinion check to avoid missing matches
-            candidateUnmatchedItems.push(itemWithId);
-          }
+          candidateItems.push({
+            ...item,
+            id: itemId,
+            cleanUrl,
+            fingerprint,
+            regexAnalysis
+          });
         }
 
-        // Step 2: Use Gemini AI to catch any matches missed by regex rules
-        if (candidateUnmatchedItems.length > 0) {
+        // Step 2: Process candidate items with Gemini AI (all items go through AI when available)
+        if (candidateItems.length > 0) {
           if (gemini.isAvailable()) {
-            console.log(`  🤖 [Gemini AI] Đang kiểm tra sâu ${candidateUnmatchedItems.length} bài chưa khớp regex để tránh bỏ sót...`);
-            const aiResults = await gemini.analyzeBatch(candidateUnmatchedItems);
+            console.log(`  🤖 [Gemini AI] Đang gửi ${candidateItems.length} bài mới qua AI để đánh giá và trích xuất dữ liệu chi tiết...`);
+            const aiResults = await gemini.analyzeBatch(candidateItems);
 
-            for (const item of candidateUnmatchedItems) {
+            for (const item of candidateItems) {
               const ai = aiResults.get(item.id);
+              const regex = item.regexAnalysis;
 
-              const isLocationMatched = config.filterByTargetLocation ? ai?.matchesTargetLocation : true;
+              if (ai) {
+                // Check if location matches: AI check OR regex venue match (prevent missing teencode)
+                const isLocationMatched = config.filterByTargetLocation
+                  ? (ai.matchesTargetLocation || regex.matchesLocation)
+                  : true;
 
-              if (ai && ai.isBadmintonMatch && isLocationMatched) {
+                const isMatch = ai.isBadmintonMatch && isLocationMatched;
+
+                if (isMatch) {
+                  matchedCount++;
+                  const mergedDetails = {
+                    venue: ai.venue || regex.details?.venue,
+                    time: ai.time || regex.details?.time,
+                    slots: ai.slots || regex.details?.slots,
+                    gender: ai.gender || regex.details?.gender,
+                    level: ai.level || regex.details?.level,
+                    shuttle: ai.shuttle || regex.details?.shuttle,
+                    fee: ai.fee || regex.details?.fee,
+                    contact: ai.contact || regex.details?.contact,
+                    notes: ai.notes || regex.details?.notes
+                  };
+
+                  const aiTags = gemini.formatAiTags({ ...ai, ...mergedDetails });
+                  const priority = gemini.determineAiPriority(ai);
+                  const locationCat = ai.locationCategory || regex.venueCategory;
+
+                  console.log(`  🎯 [KHỚP KÈO CẦU LÔNG - GEMINI AI] [${item.type}] Bởi: ${item.authorName} | Sân: ${mergedDetails.venue || locationCat} | Trình độ: ${mergedDetails.level || 'N/A'} | Tags: ${aiTags.join(', ')}`);
+
+                  // Save to database
+                  db.insertItem({
+                    id: item.id,
+                    group_id: group.id,
+                    item_type: item.type,
+                    author_name: item.authorName,
+                    content: item.text,
+                    post_url: item.cleanUrl,
+                    tags: aiTags,
+                    content_hash: item.fingerprint
+                  });
+
+                  // Dispatch alert to Telegram with AI-parsed insights
+                  await sendAlert({
+                    groupName: group.name,
+                    type: item.type,
+                    authorName: item.authorName,
+                    content: item.text,
+                    url: item.cleanUrl,
+                    tags: aiTags,
+                    priority: priority,
+                    aiSummary: ai.summary,
+                    detectedBy: 'GEMINI',
+                    parentPostText: item.parentPostText,
+                    parentPostAuthor: item.parentPostAuthor,
+                    details: mergedDetails,
+                    locationCategory: locationCat
+                  });
+                } else {
+                  // Non-match verified by AI
+                  db.insertItem({
+                    id: item.id,
+                    group_id: group.id,
+                    item_type: item.type,
+                    author_name: item.authorName,
+                    content: item.text.slice(0, 200),
+                    post_url: item.cleanUrl,
+                    tags: 'NON_MATCH',
+                    content_hash: item.fingerprint
+                  });
+                }
+              } else {
+                // Fallback for this item if AI response was missing/errored
+                if (regex.isMatch) {
+                  matchedCount++;
+                  console.log(`  🎯 [KHỚP KÈO CẦU LÔNG - REGEX FALLBACK] [${item.type}] Bởi: ${item.authorName} | Tags: ${regex.tags.join(', ')}`);
+
+                  db.insertItem({
+                    id: item.id,
+                    group_id: group.id,
+                    item_type: item.type,
+                    author_name: item.authorName,
+                    content: item.text,
+                    post_url: item.cleanUrl,
+                    tags: regex.tags,
+                    content_hash: item.fingerprint
+                  });
+
+                  await sendAlert({
+                    groupName: group.name,
+                    type: item.type,
+                    authorName: item.authorName,
+                    content: item.text,
+                    url: item.cleanUrl,
+                    tags: regex.tags,
+                    priority: regex.priority,
+                    detectedBy: 'REGEX',
+                    parentPostText: item.parentPostText,
+                    parentPostAuthor: item.parentPostAuthor,
+                    details: regex.details,
+                    locationCategory: regex.venueCategory
+                  });
+                } else {
+                  db.insertItem({
+                    id: item.id,
+                    group_id: group.id,
+                    item_type: item.type,
+                    author_name: item.authorName,
+                    content: item.text.slice(0, 200),
+                    post_url: item.cleanUrl,
+                    tags: 'NON_MATCH',
+                    content_hash: item.fingerprint
+                  });
+                }
+              }
+            }
+          } else {
+            // Gemini not configured: evaluate entirely via Regex
+            for (const item of candidateItems) {
+              const regex = item.regexAnalysis;
+              if (regex.isMatch) {
                 matchedCount++;
-                const aiTags = gemini.formatAiTags(ai);
-                const priority = gemini.determineAiPriority(ai);
+                console.log(`  🎯 [KHỚP KÈO CẦU LÔNG - REGEX] [${item.type}] Bởi: ${item.authorName} | Tags: ${regex.tags.join(', ')}`);
 
-                console.log(`  🎯 [KHỚP KÈO CẦU LÔNG - GEMINI AI] [${item.type}] Bởi: ${item.authorName} | Sân: ${ai.venue || ai.locationCategory} | Tags: ${aiTags.join(', ')} | AI: ${ai.summary}`);
-
-                // Save to database
                 db.insertItem({
                   id: item.id,
                   group_id: group.id,
@@ -512,28 +626,25 @@ async function runCrawlCycle() {
                   author_name: item.authorName,
                   content: item.text,
                   post_url: item.cleanUrl,
-                  tags: aiTags,
+                  tags: regex.tags,
                   content_hash: item.fingerprint
                 });
 
-                // Dispatch alert to Telegram with AI insights
                 await sendAlert({
                   groupName: group.name,
                   type: item.type,
                   authorName: item.authorName,
                   content: item.text,
                   url: item.cleanUrl,
-                  tags: aiTags,
-                  priority: priority,
-                  aiSummary: ai.summary,
-                  detectedBy: 'GEMINI',
+                  tags: regex.tags,
+                  priority: regex.priority,
+                  detectedBy: 'REGEX',
                   parentPostText: item.parentPostText,
                   parentPostAuthor: item.parentPostAuthor,
-                  details: ai,
-                  locationCategory: ai.locationCategory
+                  details: regex.details,
+                  locationCategory: regex.venueCategory
                 });
               } else {
-                // Verified as non-match by AI (or AI not confident)
                 db.insertItem({
                   id: item.id,
                   group_id: group.id,
@@ -545,20 +656,6 @@ async function runCrawlCycle() {
                   content_hash: item.fingerprint
                 });
               }
-            }
-          } else {
-            // Gemini not configured: record all candidate items as NON_MATCH
-            for (const item of candidateUnmatchedItems) {
-              db.insertItem({
-                id: item.id,
-                group_id: group.id,
-                item_type: item.type,
-                author_name: item.authorName,
-                content: item.text.slice(0, 200),
-                post_url: item.cleanUrl,
-                tags: 'NON_MATCH',
-                content_hash: item.fingerprint
-              });
             }
           }
         }

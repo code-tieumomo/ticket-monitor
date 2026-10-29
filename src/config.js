@@ -96,8 +96,10 @@ const config = {
     // Pure equipment sales/repair to ignore (unless there's an actual match recruitment)
     equipmentOnlyRegex: /^(?:(?:pass|bán|thanh\s*lý|mua|cần\s*mua|căng\s*cước|đan|sửa|hàn)\s*(?:vợt|giày|áo|quần|túi|bao\s*vợt|balo|cước|quấn\s*cán|yonex|lining|victor|mizuno))/i,
 
-    // Badminton skill level: Y, TBY, TB-, TB, TB+, K, C, Yếu, Trung Bình, Khá, etc.
-    levelRegex: /(?:trình\s*độ|trình|level|trinh\s*do)?\s*[:\-–]?\s*(\b(?:y\/tby|tby\s*[-–]\s*tb\+?|yếu|trung\s*bình\s*yếu|trung\s*bình|khá|cao|tb[-+±]?|tby|y\b|k\b|c\b))/i,
+    // Badminton skill level:
+    // With prefix (trình/level/rank...): can match any level specification like Tby, Tb-, C, K, Y, TB...
+    // Without prefix: only matches unambiguous multi-char terms (y/tby, tby, tb-, tb+, tb, trung bình, khá, yếu) - NEVER isolated single letters (c, k, y)
+    levelRegex: /(?:trình\s*độ|trình|level|rank|trinh\s*do)\s*[:\-–]?\s*([a-zA-Z0-9\s/+\-,±–]+?)(?=\n|$|,|\.|!|🏸|⏰|💰)|(\b(?:y\/tby|tby\s*[-–]\s*tb\+?|yếu|trung\s*bình\s*yếu|trung\s*bình|khá|tb[-+±]?|tby)\b)/i,
 
     // Time & Playing hours: e.g. 20h-22h, 20h00-22h00, 8:30 - 10:30, ca 0-2h, sáng mai, tối T2-T4...
     timeRegex: /(\b(?:\d{1,2}h(?:\d{2})?|\d{1,2}:\d{2})\s*(?:-|đến|to|–)\s*(?:\d{1,2}h(?:\d{2})?|\d{1,2}:\d{2})\b|\bca\s*\d{1,2}(?:h)?\s*[-–]\s*\d{1,2}(?:h)?\b|(?:sáng|trưa|chiều|tối|đêm)\s*(?:nay|mai|kia|\b(?:t[2-7]|cn|thứ\s*[2-7]|chủ\s*nhật)\b)|(?:thứ\s*[2-7]|chủ\s*nhật|t[2-7])\s*[-–]\s*(?:thứ\s*[2-7]|t[2-7])\s*(?:hàng\s*tuần)?)/i,
@@ -112,7 +114,7 @@ const config = {
     genderRegex: /(full\s*nữ|nam\s*\/?\s*nữ|nam|nữ)/i,
 
     // Slots needed / available
-    slotsRegex: /(sẵn\s*\d+\s*nam\s*\d+\s*nữ|\d+\s*(?:nam|nữ)|(?:tìm|tuyển|cần|thiếu)\s*(?:thêm\s*)?\d+\s*(?:mảnh\s*ghép|slot|người|bạn|thành\s*viên|vãng\s*lai|chân|cố\s*định)|\d+\s*(?:slot|mảnh\s*ghép|vãng\s*lai|cố\s*định))/i,
+    slotsRegex: /(sẵn\s*\d+\s*nam\s*\d+\s*nữ|\d+\s*(?:nam|nữ)|(?:tìm|tuyển|cần|thiếu)\s*(?:thêm\s*)?(\d+)\s*(?:mảnh\s*ghép|slot|sl|người|bạn|thành\s*viên|vãng\s*lai|chân|cố\s*định)|(\d+)\s*(?:slot|sl|mảnh\s*ghép|vãng\s*lai|cố\s*định))/i,
 
     // Contact info: SĐT, Zalo, Inbox
     contactRegex: /(?:zalo|sđt|sdt|liên\s*hệ|lh|hotline|call)\s*[:\-–]?\s*(\d{9,11})|(\b0[35789]\d{8}\b)|(?:inbox|ib\s*(?:em|mình|tui)?)/i

@@ -107,7 +107,7 @@ function extractBadmintonDetails(text, venueMatch = null) {
   details.time = timeStr;
 
   // 3. Level (Trình độ)
-  const levelLines = lines.filter(l => /(?:y\/tby|tby\b|tb[-+±]?\b|💕.*y|👱🏻.*tb|trình|level|trung\s*bình)/i.test(l) && !/(sân|địa\s*chỉ|chịu\s*được)/i.test(l));
+  const levelLines = lines.filter(l => /(?:y\/tby|tby\b|tb[-+±]?\b|💕.*y|👱🏻.*tb|trình|level|rank|trung\s*bình)/i.test(l) && !/(sân|địa\s*chỉ|chịu\s*được)/i.test(l));
   if (levelLines.length > 0) {
     details.level = levelLines
       .map(l => l.replace(/^[💕👱🏻♂️🏸*•-]*\s*/i, '').replace(/:\s*\d+\s*k/i, '').trim())
@@ -115,7 +115,13 @@ function extractBadmintonDetails(text, venueMatch = null) {
       .join(' | ');
   } else {
     const lm = text.match(config.rules.levelRegex);
-    if (lm) details.level = lm[1] ? lm[1].trim() : lm[0].trim();
+    if (lm) {
+      const val = (lm[1] || lm[2] || lm[0]).trim();
+      // Guard against false positive single letters or venue names
+      if (val && !/^(?:sân|định|công|minh|khai|tân|mai|c|k|y)$/i.test(val)) {
+        details.level = val;
+      }
+    }
   }
 
   // 4. Shuttlecock (Loại cầu)
@@ -134,9 +140,10 @@ function extractBadmintonDetails(text, venueMatch = null) {
   }
 
   // 6. Slots (Số lượng người)
-  const slotLine = lines.find(l => /(sẵn\s*\d|tìm\s*(?:thêm)?\s*\d|tuyển\s*(?:thêm)?|mảnh\s*ghép|thiếu\s*(?:nhân\s*lực|\d)|cần\s*\d|\d+\s*slot|tuyển\s*giao\s*lưu)/i.test(l));
+  const slotLine = lines.find(l => /(sẵn\s*\d|tìm\s*(?:thêm)?\s*\d|tuyển\s*(?:thêm\s*)?\d|mảnh\s*ghép|thiếu\s*(?:nhân\s*lực|\d)|cần\s*\d|\d+\s*(?:slot|sl)\b)/i.test(l));
   if (slotLine) {
-    details.slots = slotLine.replace(/^[🌸🏸*•-]*\s*/i, '').trim();
+    const slotMatch = slotLine.match(/(?:tìm|tuyển|cần|thiếu|sẵn)\s*(?:thêm\s*)?\d+\s*(?:slot|sl|mảnh\s*ghép|người|chân|vãng\s*lai)?|\d+\s*(?:slot|sl)\b/i);
+    details.slots = slotMatch ? slotMatch[0].trim() : slotLine.replace(/^[🌸🏸*•-]*\s*/i, '').trim();
   } else {
     const slm = text.match(config.rules.slotsRegex);
     if (slm) details.slots = slm[0].trim();
