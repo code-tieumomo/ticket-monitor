@@ -8,12 +8,15 @@ console.log('--- Testing Gemini AI Badminton Module ---');
 
 // Test 1: Availability check
 {
+  const origKira = config.kira.apiKey;
   const originalKey = config.gemini.apiKey;
+  config.kira.apiKey = '';
   config.gemini.apiKey = '';
   assert.strictEqual(gemini.isAvailable(), false, 'Should be unavailable when key is empty');
   
-  config.gemini.apiKey = 'dummy_test_key';
+  config.kira.apiKey = 'dummy_test_key';
   assert.strictEqual(gemini.isAvailable(), true, 'Should be available when key is set');
+  config.kira.apiKey = origKira;
   config.gemini.apiKey = originalKey; // Restore
   console.log('✅ Passed Test 1: Availability and key detection');
 }

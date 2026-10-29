@@ -8,12 +8,12 @@ Hệ thống tự động hóa quét bài viết và bình luận mới nhất t
 
 - **Giám sát đa kênh:** Quét đồng thời các nhóm Facebook công khai theo thứ tự bài viết mới nhất (`sorting_setting=CHRONOLOGICAL`).
 - **Phát hiện cả Bài viết & Bình luận (Posts & Comments):** Không bỏ sót các bình luận pass vé trong các bài đăng hot.
-- **Trí tuệ Nhân tạo Gemini 2.5 Flash Lite:**
-  - Tự động phân tích các bài đăng mà bộ lọc từ khóa Regex truyền thống bỏ sót (từ lóng, viết tắt, "nhả vé", "thừa 1 slot", teen code, văn phong tự nhiên).
-  - Tự động trích xuất cấu trúc: Hạng vé (CAT, VIP, GA...), Ngày diễn, Giá vé, Số lượng, Hình thức giao dịch an toàn (GDTT, GDTG).
+- **Trí tuệ Nhân tạo Kira AI (OpenAI-compatible):**
+  - Tự động phân tích các bài đăng mà bộ lọc từ khóa Regex truyền thống bỏ sót (từ lóng, viết tắt, "ghép team", "thiếu 1 slot", teen code, văn phong tự nhiên).
+  - Tự động trích xuất thông tin: Sân chơi, Ca/Giờ chơi, Số lượng slot, Trình độ (Y, TBY, TB, K...), Loại cầu, Chi phí, Liên hệ.
   - Tóm tắt nội dung bài đăng 1 câu ngắn gọn trực tiếp trên thông báo Telegram.
-  - Sử dụng model tiết kiệm chi phí siêu nhanh `gemini-2.5-flash-lite`, xử lý gom lô (batch) chỉ tốn 1 request API cho cả trang nhóm.
-- **Bộ lọc thông minh kép (Hybrid Engine: Regex + Gemini AI):**
+  - Hỗ trợ endpoint Kira AI (`https://kiraai.vn/api/v1`) với các model như `kira-2.5-flash`, `kira-3.5-pro`, `kira-3.5-flash`... xử lý gom lô (batch) tối ưu tốc độ và chi phí.
+- **Bộ lọc thông minh kép (Hybrid Engine: Regex + Kira AI):**
   - Nhận diện nhu cầu bán: `pass`, `nhượng`, `bán lại`, `để lại`, `chia lại`, `pass gấp`...
   - Tự động loại trừ người tìm mua: `cần mua`, `tìm mua`, `tìm vé`, `thu mua`, `ai pass vé`...
   - Nhận diện hạng vé: VIP 1, VIP A, CAT 1-8, GA 1-5, Standing, Seated, Fanzone...
@@ -82,12 +82,12 @@ TELEGRAM_CHAT_ID=-1001234567890
 # Danh sách URL nhóm Facebook cần quét (phân cách bởi dấu phẩy)
 FB_GROUP_URLS=https://www.facebook.com/groups/GROUP_ID_1,https://www.facebook.com/groups/GROUP_ID_2
 
-# Cấu hình Gemini AI (Mô hình: gemini-2.5-flash-lite siêu tiết kiệm và chính xác)
-# Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=AIzaSy...
-GEMINI_MODEL=gemini-2.5-flash-lite
-ENABLE_GEMINI=true
-GEMINI_MODE=smart
+# Cấu hình Kira AI Filter (OpenAI-compatible)
+KIRA_BASE_URL=https://kiraai.vn/api/v1
+KIRA_API_KEY=kira_...
+KIRA_MODEL=kira-2.5-flash
+ENABLE_KIRA=true
+KIRA_MODE=smart
 ```
 
 > **Cách lấy Telegram Bot Token & Chat ID:**

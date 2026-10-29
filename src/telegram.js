@@ -52,7 +52,7 @@ async function sendAlert({
   const cleaned = cleanContentForTelegram(content);
   const shortContent = cleaned.length > 500 ? cleaned.slice(0, 497) + '...' : cleaned;
   const isHighPriority = priority === 'HIGH';
-  const isAiDetected = detectedBy === 'GEMINI';
+  const isAiDetected = detectedBy === 'KIRA_AI' || detectedBy === 'GEMINI' || detectedBy === 'AI';
   const isComment = type === 'COMMENT';
   const headerIcon = isHighPriority ? '🔥🏸' : '🏸✨';
   const priorityTag = isHighPriority ? ' [GẤP / HÔM NAY]' : '';

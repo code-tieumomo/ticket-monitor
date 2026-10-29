@@ -37,13 +37,18 @@ const config = {
     botToken: process.env.TELEGRAM_BOT_TOKEN || '',
     chatId: process.env.TELEGRAM_CHAT_ID || '',
   },
+  kira: {
+    baseURL: process.env.KIRA_BASE_URL || 'https://kiraai.vn/api/v1',
+    apiKey: process.env.KIRA_API_KEY || 'kira_05998b609d5de73f5aaf084cfe1ac209',
+    model: process.env.KIRA_MODEL || 'kira-2.5-flash',
+    enabled: process.env.ENABLE_KIRA !== 'false' && process.env.ENABLE_AI !== 'false',
+    mode: process.env.KIRA_MODE || process.env.AI_MODE || 'smart', // 'smart' (AI checks to extract info & avoid missing matches) | 'all'
+  },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
-    model: (process.env.GEMINI_MODEL && !process.env.GEMINI_MODEL.includes('3.5')) 
-      ? process.env.GEMINI_MODEL 
-      : 'gemini-2.5-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
     enabled: process.env.ENABLE_GEMINI !== 'false',
-    mode: process.env.GEMINI_MODE || 'smart', // 'smart' (AI checks to extract info & avoid missing matches) | 'all'
+    mode: process.env.GEMINI_MODE || 'smart',
   },
   paths: {
     storageState: path.resolve(process.cwd(), process.env.STORAGE_STATE_PATH || 'cookies/fb-auth.json'),

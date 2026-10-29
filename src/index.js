@@ -2,7 +2,7 @@ const fs = require('fs');
 const config = require('./config');
 const db = require('./database');
 const { runCrawlCycle } = require('./crawler');
-const gemini = require('./gemini');
+const kira = require('./kira');
 const { sendSystemAlert } = require('./telegram');
 
 let isRunning = true;
@@ -47,12 +47,12 @@ async function main() {
   });
   console.log(`💾 Cơ sở dữ liệu: ${config.paths.dbPath}`);
   console.log(`🤖 Telegram Bot: ${config.telegram.botToken ? 'Đã cấu hình' : 'Chưa cấu hình (chạy ở chế độ preview)'}`);
-  console.log(`🧠 Gemini AI: ${gemini.isAvailable() ? `Đã kích hoạt (Model: ${config.gemini.model}, Chế độ: ${config.gemini.mode})` : 'Chưa cấu hình GEMINI_API_KEY (Đang chạy chế độ Regex thuần)'}`);
+  console.log(`🧠 Kira AI: ${kira.isAvailable() ? `Đã kích hoạt (Model: ${config.kira.model}, BaseURL: ${config.kira.baseURL})` : 'Chưa cấu hình KIRA_API_KEY (Đang chạy chế độ Regex thuần)'}`);
   console.log(`🍪 Auth Cookie: ${fs.existsSync(config.paths.storageState) ? 'Đã sẵn sàng' : 'Chưa có file cookies/fb-auth.json'}`);
   console.log('================================================================\n');
 
-  if (!gemini.isAvailable()) {
-    console.log('💡 [Gợi ý] Thêm GEMINI_API_KEY vào .env để kích hoạt AI trích xuất thông tin chi tiết (giờ chơi, số lượng nam/nữ, trình độ, loại cầu...)');
+  if (!kira.isAvailable()) {
+    console.log('💡 [Gợi ý] Thêm KIRA_API_KEY vào .env để kích hoạt AI trích xuất thông tin chi tiết (giờ chơi, số lượng nam/nữ, trình độ, loại cầu...)');
     console.log('----------------------------------------------------------------\n');
   }
 

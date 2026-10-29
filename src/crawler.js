@@ -4,7 +4,7 @@ const fs = require('fs');
 const config = require('./config');
 const db = require('./database');
 const { parseContent } = require('./parser');
-const gemini = require('./gemini');
+const kira = require('./kira');
 const { sendAlert, sendSystemAlert } = require('./telegram');
 
 /**
@@ -487,11 +487,11 @@ async function runCrawlCycle() {
           });
         }
 
-        // Step 2: Process candidate items with Gemini AI (all items go through AI when available)
+        // Step 2: Process candidate items with Kira AI (all items go through AI when available)
         if (candidateItems.length > 0) {
-          if (gemini.isAvailable()) {
-            console.log(`  🤖 [Gemini AI] Đang gửi ${candidateItems.length} bài mới qua AI để đánh giá và trích xuất dữ liệu chi tiết...`);
-            const aiResults = await gemini.analyzeBatch(candidateItems);
+          if (kira.isAvailable()) {
+            console.log(`  🤖 [Kira AI] Đang gửi ${candidateItems.length} bài mới qua AI để đánh giá và trích xuất dữ liệu chi tiết...`);
+            const aiResults = await kira.analyzeBatch(candidateItems);
 
             for (const item of candidateItems) {
               const ai = aiResults.get(item.id);
@@ -520,11 +520,11 @@ async function runCrawlCycle() {
                     notes: ai.notes || regex.details?.notes
                   };
 
-                  const aiTags = gemini.formatAiTags({ ...ai, ...mergedDetails });
-                  const priority = gemini.determineAiPriority(ai);
+                  const aiTags = kira.formatAiTags({ ...ai, ...mergedDetails });
+                  const priority = kira.determineAiPriority(ai);
                   const locationCat = ai.locationCategory || regex.venueCategory;
 
-                  console.log(`  🎯 [KHỚP KÈO CẦU LÔNG - GEMINI AI] [${item.type}] Bởi: ${item.authorName} | Sân: ${mergedDetails.venue || locationCat} | Trình độ: ${mergedDetails.level || 'N/A'} | Tags: ${aiTags.join(', ')}`);
+                  console.log(`  🎯 [KHỚP KÈO CẦU LÔNG - KIRA AI] [${item.type}] Bởi: ${item.authorName} | Sân: ${mergedDetails.venue || locationCat} | Trình độ: ${mergedDetails.level || 'N/A'} | Tags: ${aiTags.join(', ')}`);
 
                   // Save to database
                   db.insertItem({
@@ -548,7 +548,7 @@ async function runCrawlCycle() {
                     tags: aiTags,
                     priority: priority,
                     aiSummary: ai.summary,
-                    detectedBy: 'GEMINI',
+                    detectedBy: 'KIRA_AI',
                     parentPostText: item.parentPostText,
                     parentPostAuthor: item.parentPostAuthor,
                     details: mergedDetails,
@@ -613,7 +613,7 @@ async function runCrawlCycle() {
               }
             }
           } else {
-            // Gemini not configured: evaluate entirely via Regex
+            // Kira AI not configured: evaluate entirely via Regex
             for (const item of candidateItems) {
               const regex = item.regexAnalysis;
               if (regex.isMatch) {
