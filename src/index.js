@@ -80,9 +80,10 @@ async function main() {
       const result = await runCrawlCycle();
 
       if (!result.success && result.reason === 'checkpoint_detected') {
-        console.error('⛔ Tạm dừng vòng lặp do phát hiện Checkpoint tài khoản!');
-        console.error('Vui lòng kiểm tra lại tài khoản Facebook trên trình duyệt và cập nhật cookie mới.');
-        break;
+        console.error('⛔ Phát hiện Checkpoint hoặc phiên đăng nhập Facebook hết hạn!');
+        console.error('Bot sẽ tạm nghỉ 15 phút trước khi thử lại hoặc chờ bạn cập nhật cookie mới...');
+        await sleep(15 * 60 * 1000);
+        continue;
       }
     } catch (cycleErr) {
       console.error('[Main Loop Error]:', cycleErr.message);

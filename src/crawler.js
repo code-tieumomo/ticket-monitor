@@ -258,9 +258,22 @@ async function runCrawlCycle() {
           return { success: false, reason: 'checkpoint_detected' };
         }
 
-        // Scroll slightly down to trigger lazy loading of top feed posts
-        await page.mouse.wheel(0, 1500);
-        await page.waitForTimeout(3000);
+        // Progressive scrolling to load enough posts and expand hidden text ("Xem thêm")
+        const scrollRounds = Math.min(Math.max(Math.ceil(config.crawler.maxPostsPerGroup / 4), 2), 6);
+        for (let s = 0; s < scrollRounds; s++) {
+          await page.evaluate(() => {
+            // Expand "Xem thêm" / "See more" buttons so full court & match details are visible
+            const buttons = Array.from(document.querySelectorAll('div[role="button"]'));
+            for (const b of buttons) {
+              const text = (b.innerText || '').trim();
+              if (text === 'Xem thêm' || text === 'See more') {
+                try { b.click(); } catch {}
+              }
+            }
+            window.scrollBy(0, 2500);
+          });
+          await page.waitForTimeout(1800);
+        }
 
         // Extract feed posts & comments
         const items = await page.evaluate((maxPosts) => {
