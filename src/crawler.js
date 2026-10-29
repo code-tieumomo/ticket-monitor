@@ -498,9 +498,10 @@ async function runCrawlCycle() {
               const regex = item.regexAnalysis;
 
               if (ai) {
-                // Check if location matches: AI check OR regex venue match (prevent missing teencode)
+                // Check if location matches: MUST be one of target categories OR verified by target regex
+                const isTargetCategory = ['120_DINH_CONG', '488_MINH_KHAI', 'TAN_MAI'].includes(ai.locationCategory);
                 const isLocationMatched = config.filterByTargetLocation
-                  ? (ai.matchesTargetLocation || regex.matchesLocation)
+                  ? (isTargetCategory || (regex.matchesLocation && ai.locationCategory !== 'OTHER'))
                   : true;
 
                 const isMatch = ai.isBadmintonMatch && isLocationMatched;

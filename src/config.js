@@ -41,7 +41,7 @@ const config = {
     apiKey: process.env.GEMINI_API_KEY || '',
     model: (process.env.GEMINI_MODEL && !process.env.GEMINI_MODEL.includes('3.5')) 
       ? process.env.GEMINI_MODEL 
-      : 'gemini-2.5-flash-lite',
+      : 'gemini-2.5-flash',
     enabled: process.env.ENABLE_GEMINI !== 'false',
     mode: process.env.GEMINI_MODE || 'smart', // 'smart' (AI checks to extract info & avoid missing matches) | 'all'
   },

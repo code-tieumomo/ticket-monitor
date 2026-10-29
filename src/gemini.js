@@ -30,14 +30,14 @@ const SYSTEM_INSTRUCTION = `Bạn là hệ thống AI phân tích thông minh ch
 
 NHIỆM VỤ CỦA BẠN:
 1. Xác định xem nội dung có phải là bài đăng/bình luận TÌM NGƯỜI CHƠI CẦU LÔNG CÙNG (tuyển slot, tuyển vãng lai, tuyển cố định, ghép team, giao lưu cầu lông, thiếu chân, tìm bạn đánh cùng, pass lại giờ sân cầu lông...) hay không.
-2. Kiểm tra xem ĐỊA ĐIỂM / SÂN CẦU LÔNG có thuộc hoặc lân cận các khu vực mục tiêu sau hay không:
-   - Sân 120 Định Công / Sân Maxping Định Công (bao gồm viết tắt/teencode: 120 Định Công, 120 dc, 120dc, 120 đc, maxping, maxping định công, sân định công, ntđ định công, nhà thi đấu định công...). Lưu ý: Sân Maxping nằm tại ngõ 120 Định Công.
-   - Sân 488 Minh Khai (bao gồm: 488 minh khai, 488 mk, 488mk, sân minh khai, sân 488...).
-   - Sân Tân Mai (bao gồm: tân mai, tan mai, sân tân mai, sân tm, trường tân mai, đền lừ...).
-   * Phân biệt teencode:
-     - "dc", "đc" đi với 120 hoặc đi với sân (như "120 dc", "sân dc", "120đc") -> Định Công. Không nhầm với chữ "được".
-     - "mk" đi với 488 hoặc sân ("488 mk", "sân mk") -> Minh Khai.
-     - "tm" đi với sân ("sân tm") -> Tân Mai.
+2. KIỂM TRA ĐỊA ĐIỂM / SÂN CẦU LÔNG (CỰC KỲ QUAN TRỌNG):
+   Chỉ chấp nhận các bài có sân chơi thuộc đúng 3 khu vực sân mục tiêu sau:
+   - Sân 120 Định Công / Sân Maxping Định Công (category: "120_DINH_CONG") - bao gồm teencode: 120 dc, 120dc, maxping, maxping định công, sân định công, ntđ định công...
+   - Sân 488 Minh Khai (category: "488_MINH_KHAI") - bao gồm: 488 minh khai, 488 mk, 488mk, sân minh khai, sân 488...
+   - Sân Tân Mai (category: "TAN_MAI") - bao gồm: tân mai, tan mai, sân tân mai, sân tm, trường tân mai, đền lừ...
+   * QUY TẮC BẮT BUỘC: 
+     - Tất cả các sân ở khu vực/quận khác (như Lê Văn Thiêm, Thanh Xuân, Cầu Giấy, Hà Đông, Đống Đa, Nam Từ Liêm, Tây Hồ, Long Biên...) hoặc bài không nêu rõ sân BẮT BUỘC gán locationCategory = "OTHER" và matchesTargetLocation = false.
+     - KHÔNG mở rộng ra các quận lân cận. Chỉ chấp nhận đúng 3 cụm sân trên.
 3. TRÍCH XUẤT CÀNG NHIỀU THÔNG TIN HỮU ÍCH CÀNG TỐT:
    - Sân / Địa điểm (venue): Tên sân cụ thể (ví dụ: Sân Maxping Định Công - Sân 8).
    - Thời gian (time): Giờ chơi, ca chơi, ngày chơi (ví dụ: 8:30 - 10:30 sáng mai, ca 20h-22h tối T2-T4 hàng tuần).
@@ -149,11 +149,11 @@ const BATCH_ITEMS_SCHEMA = {
           },
           matchesTargetLocation: {
             type: Type.BOOLEAN,
-            description: 'True nếu sân là 120 Định Công/Maxping, 488 Minh Khai, hoặc Tân Mai'
+            description: 'True nếu sân chơi CHÍNH XÁC là 1 trong 3 sân: 120 Định Công/Maxping, 488 Minh Khai, hoặc Tân Mai. BẮT BUỘC trả về False nếu sân ở khu vực khác (như Phúc Long Lê Văn Thiêm, Cầu Giấy, Nguyễn Xiển...) hoặc không rõ.'
           },
           locationCategory: {
             type: Type.STRING,
-            description: '120_DINH_CONG | 488_MINH_KHAI | TAN_MAI | OTHER'
+            description: '120_DINH_CONG | 488_MINH_KHAI | TAN_MAI | OTHER (Tất cả sân ở nơi khác bắt buộc là OTHER)'
           },
           venue: {
             type: Type.STRING,
@@ -260,16 +260,28 @@ async function analyzeContent(text, meta = {}) {
     };
     const prompt = `Phân tích đối tượng sau theo các quy tắc kiểm tra kèo cầu lông:\n\n${formatItemForPrompt(itemObj, 0)}`;
 
-    const response = await client.models.generateContent({
-      model: config.gemini.model,
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseJsonSchema: SINGLE_ITEM_SCHEMA,
-        abortSignal: AbortSignal.timeout(15000)
+    let response = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        response = await client.models.generateContent({
+          model: config.gemini.model,
+          contents: prompt,
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: 'application/json',
+            responseJsonSchema: SINGLE_ITEM_SCHEMA,
+            abortSignal: AbortSignal.timeout(15000)
+          }
+        });
+        if (response) break;
+      } catch (callErr) {
+        if (attempt < 2 && /503|429/i.test(callErr.message)) {
+          await new Promise(r => setTimeout(r, 1500));
+        } else {
+          throw callErr;
+        }
       }
-    });
+    }
 
     const parsed = JSON.parse(response.text);
     return parsed;
@@ -296,18 +308,30 @@ async function analyzeBatch(items = []) {
   try {
     const formattedList = items.map((item, index) => formatItemForPrompt(item, index)).join('\n');
 
-    const prompt = `Hãy phân tích đồng thời danh sách ${items.length} bài viết/bình luận dưới đây để tìm các kèo cầu lông (đặc biệt tại sân 120 Định Công/Maxping, 488 Minh Khai, Tân Mai) và trả về mảng kết quả tương ứng với từng ID:\n\n${formattedList}`;
+    const prompt = `Hãy phân tích đồng thời danh sách ${items.length} bài viết/bình luận dưới đây để lọc kèo cầu lông. Lưu ý: Chỉ đánh dấu matchesTargetLocation = true và locationCategory thuộc (120_DINH_CONG, 488_MINH_KHAI, TAN_MAI) nếu sân thuộc đúng 3 khu vực này. Nếu sân ở bất kỳ nơi nào khác (như Lê Văn Thiêm, Thanh Xuân, Cầu Giấy, Hà Đông...) thì matchesTargetLocation BẮT BUỘC là false và locationCategory = 'OTHER':\n\n${formattedList}`;
 
-    const response = await client.models.generateContent({
-      model: config.gemini.model,
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseJsonSchema: BATCH_ITEMS_SCHEMA,
-        abortSignal: AbortSignal.timeout(25000)
+    let response = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        response = await client.models.generateContent({
+          model: config.gemini.model,
+          contents: prompt,
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: 'application/json',
+            responseJsonSchema: BATCH_ITEMS_SCHEMA,
+            abortSignal: AbortSignal.timeout(25000)
+          }
+        });
+        if (response) break;
+      } catch (callErr) {
+        if (attempt < 2 && /503|429/i.test(callErr.message)) {
+          await new Promise(r => setTimeout(r, 1500));
+        } else {
+          throw callErr;
+        }
       }
-    });
+    }
 
     const parsed = JSON.parse(response.text);
     if (parsed && Array.isArray(parsed.results)) {
