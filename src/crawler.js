@@ -441,7 +441,11 @@ async function runCrawlCycle() {
           return results;
         }, config.crawler.maxPostsPerGroup);
 
-        console.log(`  -> Tìm thấy ${items.length} bài viết/bình luận gần nhất.`);
+        if (items.length === 0) {
+          console.log(`  -> Không tìm thấy bài viết/bình luận nào trên trang (hoặc cần quyền truy cập nhóm).`);
+        } else {
+          console.log(`  -> Tìm thấy ${items.length} bài viết/bình luận gần nhất:`);
+        }
 
         let matchedCount = 0;
         const candidateItems = [];
@@ -452,8 +456,21 @@ async function runCrawlCycle() {
           const itemId = generateItemId(item.url, item.type, group.id, item.authorName, item.text);
           const fingerprint = generateContentFingerprint(group.id, item.type, item.authorName, item.text);
 
+          const isPost = item.type === 'POST';
+          const typeTag = isPost ? '📝 [POST]' : '💬 [CMT]';
+          const author = item.authorName || 'Ẩn danh';
+          const oneLineText = (item.text || '').replace(/\s+/g, ' ').trim();
+          const previewText = oneLineText
+            ? (oneLineText.length > 95 ? oneLineText.slice(0, 92) + '...' : oneLineText)
+            : '(Nội dung không có chữ / chỉ có ảnh)';
+
           // Dual-key deduplication: check canonical ID OR content fingerprint
-          if (db.isExists(itemId, fingerprint)) {
+          const isDup = db.isExists(itemId, fingerprint);
+          const statusTag = isDup ? '⏩ [Đã quét]' : '✨ [Mới]';
+
+          console.log(`   ${statusTag} ${typeTag} ${author}: "${previewText}"`);
+
+          if (isDup) {
             continue; // Already processed in past cycles
           }
 
